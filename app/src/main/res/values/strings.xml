@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">PacLearn</string>
+    <string name="welcome_message">Bienvenue sur PacLearn</string>
+</resources>
