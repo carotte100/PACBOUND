@@ -1,0 +1,12 @@
+# Modele de configuration locale.
+#
+# Copier ce fichier en "local.properties" (jamais versionne, propre a chaque PC)
+# puis renseigner le token ci-dessous.
+#
+# sdk.dir n'a pas a etre ecrit a la main : Android Studio l'ajoute tout seul
+# a l'ouverture du projet, avec le chemin du SDK de la machine.
+#
+# Token Mapillary : compte gratuit sur mapillary.com
+# -> Settings > Developers > Register an application (droit READ uniquement)
+
+MAPILLARY_TOKEN=
