@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">PacLearn</string>
-    <string name="welcome_message">Bienvenue sur PacLearn</string>
+    <string name="error_roads_unavailable">Impossible de charger les rues autour de toi</string>
+    <string name="location_permission_denied">Sans localisation, la carte reste sur Paris</string>
 </resources>
