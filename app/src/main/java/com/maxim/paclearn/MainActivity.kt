@@ -1,7 +1,14 @@
 package com.maxim.paclearn
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.location.Location
+import android.location.LocationManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,15 +17,17 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.maxim.paclearn.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONException
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
+import org.osmdroid.views.overlay.mylocation.IMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import java.io.IOException
@@ -28,6 +37,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var locationOverlay: MyLocationNewOverlay
+    private var orbOverlay: OrbOverlay? = null
+    private var orbsSpawnedAt: GeoPoint? = null
+    private var spawnJob: Job? = null
     private var trackingStarted = false
 
     private val locationPermissionRequest = registerForActivityResult(
@@ -37,14 +49,13 @@ class MainActivity : AppCompatActivity() {
             startTracking()
         } else {
             Toast.makeText(this, R.string.location_permission_denied, Toast.LENGTH_LONG).show()
-            spawnOrbsAround(FALLBACK_POSITION)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Les serveurs de tuiles OSM exigent un User-Agent identifiant l'app.
+        // Les serveurs de tuiles exigent un User-Agent identifiant l'app.
         // Le cache est force dans le stockage prive pour ne demander aucune
         // permission de stockage, quelle que soit la version d'Android.
         Configuration.getInstance().apply {
@@ -56,13 +67,24 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        locationOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView)
+        locationOverlay = object : MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView) {
+            override fun onLocationChanged(location: Location, source: IMyLocationProvider?) {
+                super.onLocationChanged(location, source)
+                onPlayerLocation(GeoPoint(location.latitude, location.longitude))
+            }
+        }.apply {
+            val marker = playerMarkerBitmap()
+            setPersonIcon(marker)
+            setDirectionIcon(marker)
+            setPersonAnchor(0.5f, 0.5f)
+            setDirectionAnchor(0.5f, 0.5f)
+        }
 
         binding.mapView.apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            setTileSource(CARTO_NO_LABELS)
             setMultiTouchControls(true)
-            controller.setZoom(START_ZOOM)
-            controller.setCenter(FALLBACK_POSITION)
+            controller.setZoom(WAITING_ZOOM)
+            controller.setCenter(WAITING_POSITION)
             overlays.add(CopyrightOverlay(context))
             overlays.add(locationOverlay)
         }
@@ -86,14 +108,40 @@ class MainActivity : AppCompatActivity() {
         trackingStarted = true
         locationOverlay.enableMyLocation()
         locationOverlay.enableFollowLocation()
-        locationOverlay.runOnFirstFix {
-            val here = locationOverlay.myLocation ?: return@runOnFirstFix
-            runOnUiThread { spawnOrbsAround(here) }
+
+        // Un premier fix GPS peut prendre des minutes en interieur : on part de la
+        // derniere position connue du telephone, le GPS affinera ensuite.
+        val lastKnown = lastKnownLocation()
+        if (lastKnown != null) {
+            locationOverlay.onLocationChanged(lastKnown, null)
+        } else {
+            Toast.makeText(this, R.string.searching_position, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun lastKnownLocation(): Location? {
+        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        return locationManager.allProviders
+            .mapNotNull { locationManager.getLastKnownLocation(it) }
+            .maxByOrNull { it.time }
+    }
+
+    private fun onPlayerLocation(position: GeoPoint) {
+        val spawnedAt = orbsSpawnedAt
+        if (spawnedAt == null) {
+            binding.mapView.controller.setZoom(PLAY_ZOOM)
+            binding.mapView.controller.setCenter(position)
+        }
+        if (spawnedAt == null || spawnedAt.distanceToAsDouble(position) > RESPAWN_DISTANCE_M) {
+            spawnOrbsAround(position)
         }
     }
 
     private fun spawnOrbsAround(center: GeoPoint) {
-        lifecycleScope.launch {
+        orbsSpawnedAt = center
+        spawnJob?.cancel()
+        spawnJob = lifecycleScope.launch {
             val orbs = try {
                 withContext(Dispatchers.IO) {
                     val roads = RoadFetcher.fetchRoads(bboxAround(center, SPAWN_RADIUS_M), packageName)
@@ -108,8 +156,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             val radiusPx = ORB_RADIUS_DP * resources.displayMetrics.density
-            // Les orbes passent sous le point de position pour que le joueur reste visible.
-            binding.mapView.overlays.add(0, OrbOverlay(orbs, radiusPx))
+            orbOverlay?.let { binding.mapView.overlays.remove(it) }
+            // Les orbes passent sous le curseur pour que le joueur reste visible.
+            orbOverlay = OrbOverlay(orbs, radiusPx).also { binding.mapView.overlays.add(0, it) }
             binding.mapView.invalidate()
         }
     }
@@ -121,6 +170,20 @@ class MainActivity : AppCompatActivity() {
             center.latitude + dLat, center.longitude + dLon,
             center.latitude - dLat, center.longitude - dLon
         )
+    }
+
+    private fun playerMarkerBitmap(): Bitmap {
+        val density = resources.displayMetrics.density
+        val size = (PLAYER_MARKER_DP * density).toInt()
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val center = size / 2f
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.color = Color.WHITE
+        canvas.drawCircle(center, center, center, paint)
+        paint.color = Color.rgb(33, 150, 243)
+        canvas.drawCircle(center, center, center - 3 * density, paint)
+        return bitmap
     }
 
     override fun onResume() {
@@ -136,11 +199,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private companion object {
-        val FALLBACK_POSITION = GeoPoint(48.8584, 2.2945)
-        const val START_ZOOM = 17.0
+        val CARTO_NO_LABELS = XYTileSource(
+            "CartoLightNoLabels", 0, 20, 512, "@2x.png",
+            arrayOf(
+                "https://a.basemaps.cartocdn.com/light_nolabels/",
+                "https://b.basemaps.cartocdn.com/light_nolabels/",
+                "https://c.basemaps.cartocdn.com/light_nolabels/"
+            ),
+            "© OpenStreetMap contributors © CARTO"
+        )
+
+        // Vue d'attente centree sur la France, tant que la position est inconnue.
+        val WAITING_POSITION = GeoPoint(46.6, 2.4)
+        const val WAITING_ZOOM = 6.0
+        const val PLAY_ZOOM = 17.0
+
         const val SPAWN_RADIUS_M = 400.0
+        const val RESPAWN_DISTANCE_M = 200.0
         const val ORB_SPACING_M = 20.0
-        const val ORB_RADIUS_DP = 5f
+        const val ORB_RADIUS_DP = 6f
+        const val PLAYER_MARKER_DP = 26f
         const val METERS_PER_DEGREE = 111_320.0
     }
 }
