@@ -8,8 +8,10 @@ import java.net.URL
 import java.net.URLEncoder
 
 private const val OVERPASS = "https://overpass-api.de/api/interpreter"
+// Trottoirs, chemins et voies de parking exclus : OSM les cartographie en
+// double de chaque rue, ce qui noie la carte sous les orbes.
 private const val WALKABLE =
-    "primary|secondary|tertiary|residential|unclassified|living_street|pedestrian|footway|path|cycleway|service"
+    "primary|secondary|tertiary|residential|unclassified|living_street|pedestrian"
 
 /** Trace des rues praticables dans la zone, via l'API Overpass d'OpenStreetMap. */
 fun fetchRoads(bbox: BoundingBox, userAgent: String): List<List<GeoPoint>> {

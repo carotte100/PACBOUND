@@ -43,8 +43,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Les serveurs de tuiles OSM exigent un User-Agent identifiant l'app, et
-        // le cache va dans le stockage prive pour ne demander aucune permission.
         Configuration.getInstance().apply {
             userAgentValue = packageName
             osmdroidBasePath = File(filesDir, "osmdroid")
@@ -141,6 +139,6 @@ class MainActivity : AppCompatActivity() {
         const val PLAY_ZOOM = 18.0
         const val SPAWN_RADIUS_M = 400.0
         const val RESPAWN_M = 200.0
-        const val ORB_SPACING_M = 20.0
+        const val ORB_SPACING_M = 50.0
     }
 }
