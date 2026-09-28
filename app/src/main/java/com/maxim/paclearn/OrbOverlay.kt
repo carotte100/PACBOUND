@@ -4,38 +4,26 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Point
+import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
-class OrbOverlay(private val orbs: List<Orb>, private val radiusPx: Float) : Overlay() {
+/** Dessine les orbes a ramasser, par-dessus la carte. */
+class OrbOverlay(private val orbs: List<GeoPoint>, density: Float) : Overlay() {
 
-    private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        style = Paint.Style.FILL
-    }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(255, 193, 7)
-        style = Paint.Style.FILL
-    }
-    private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(230, 81, 0)
-        style = Paint.Style.STROKE
-        strokeWidth = radiusPx * 0.35f
-    }
-    private val haloRadius = radiusPx * 1.4f
-    private val screenPoint = Point()
+    private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 179, 0) }
+    private val radius = 5 * density
+    private val point = Point()
 
     override fun draw(canvas: Canvas, projection: Projection) {
-        val width = canvas.width
-        val height = canvas.height
         for (orb in orbs) {
-            projection.toPixels(orb.position, screenPoint)
-            val x = screenPoint.x.toFloat()
-            val y = screenPoint.y.toFloat()
-            if (x < -haloRadius || x > width + haloRadius || y < -haloRadius || y > height + haloRadius) continue
-            canvas.drawCircle(x, y, haloRadius, halo)
-            canvas.drawCircle(x, y, radiusPx, fill)
-            canvas.drawCircle(x, y, radiusPx, outline)
+            projection.toPixels(orb, point)
+            val x = point.x.toFloat()
+            val y = point.y.toFloat()
+            if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) continue
+            canvas.drawCircle(x, y, radius * 1.4f, halo)
+            canvas.drawCircle(x, y, radius, fill)
         }
     }
 }
