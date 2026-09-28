@@ -13,7 +13,7 @@ class OrbOverlay(private val orbs: List<GeoPoint>, density: Float) : Overlay() {
 
     private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 179, 0) }
-    private val radius = 5 * density
+    private val radius = 3.5f * density
     private val point = Point()
 
     override fun draw(canvas: Canvas, projection: Projection) {

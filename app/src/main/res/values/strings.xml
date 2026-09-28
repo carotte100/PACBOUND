@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">PacLearn</string>
     <string name="roads_unavailable">Impossible de charger les rues autour de toi</string>
-    <string name="location_denied">Sans localisation, impossible de te placer sur la carte</string>
+    <string name="location_denied">Autorisation de localisation refusée</string>
+    <string name="location_off">Localisation désactivée sur l\'appareil</string>
     <string name="searching_position">Recherche de ta position…</string>
 </resources>

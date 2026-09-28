@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -37,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.any { it }) startTracking()
-        else Toast.makeText(this, R.string.location_denied, Toast.LENGTH_LONG).show()
+        else binding.status.setText(R.string.location_denied)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.status.setText(R.string.searching_position)
 
         player = object : MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView) {
             override fun onLocationChanged(location: Location, source: IMyLocationProvider?) {
@@ -84,17 +86,23 @@ class MainActivity : AppCompatActivity() {
         player.enableMyLocation()
         player.enableFollowLocation()
 
-        // Un premier fix GPS peut prendre des minutes en interieur : on demarre
-        // sur la derniere position connue du telephone.
         val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        // Un premier fix GPS peut prendre des minutes : on demarre sur la
+        // derniere position connue, le suivi prendra le relais.
         val last = manager.allProviders
             .mapNotNull { manager.getLastKnownLocation(it) }
             .maxByOrNull { it.time }
-        if (last != null) player.onLocationChanged(last, null)
-        else Toast.makeText(this, R.string.searching_position, Toast.LENGTH_LONG).show()
+
+        when {
+            last != null -> onPlayerMoved(GeoPoint(last.latitude, last.longitude))
+            manager.allProviders.none { manager.isProviderEnabled(it) } ->
+                binding.status.setText(R.string.location_off)
+            else -> binding.status.setText(R.string.searching_position)
+        }
     }
 
     private fun onPlayerMoved(position: GeoPoint) {
+        binding.status.visibility = View.GONE
         val from = spawnedAt
         if (from == null) binding.mapView.controller.setCenter(position)
         if (from == null || from.distanceToAsDouble(position) > RESPAWN_M) spawn(position)
@@ -139,6 +147,6 @@ class MainActivity : AppCompatActivity() {
         const val PLAY_ZOOM = 18.0
         const val SPAWN_RADIUS_M = 400.0
         const val RESPAWN_M = 200.0
-        const val ORB_SPACING_M = 50.0
+        const val ORB_SPACING_M = 90.0
     }
 }
