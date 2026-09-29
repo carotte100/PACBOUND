@@ -7,13 +7,13 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
 import android.view.View
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.maxim.paclearn.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
@@ -30,6 +30,7 @@ import kotlin.math.cos
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var locationProvider: GpsMyLocationProvider
     private lateinit var player: MyLocationNewOverlay
     private var orbs: OrbOverlay? = null
     private var spawnedAt: GeoPoint? = null
@@ -38,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.any { it }) startTracking()
-        else binding.status.setText(R.string.location_denied)
+        else showStatus(R.string.location_denied)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,9 +53,10 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        binding.status.setText(R.string.searching_position)
+        showStatus(R.string.searching_position)
 
-        player = object : MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView) {
+        locationProvider = GpsMyLocationProvider(this)
+        player = object : MyLocationNewOverlay(locationProvider, binding.mapView) {
             override fun onLocationChanged(location: Location, source: IMyLocationProvider?) {
                 super.onLocationChanged(location, source)
                 onPlayerMoved(GeoPoint(location.latitude, location.longitude))
@@ -81,23 +83,46 @@ class MainActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
 
-    @SuppressLint("MissingPermission")
     private fun startTracking() {
+        // Le suivi continu : chaque nouvelle position redessine le personnage
+        // et recentre la carte.
         player.enableMyLocation()
         player.enableFollowLocation()
 
+        useLastKnownLocation()
+        retryUntilLocated()
+    }
+
+    /**
+     * Un premier point GPS peut prendre des minutes en interieur. On reprend la
+     * derniere position connue du telephone en passant par le fournisseur, pour
+     * que le personnage soit dessine au lieu d'attendre un point tout neuf.
+     */
+    @SuppressLint("MissingPermission")
+    private fun useLastKnownLocation(): Boolean {
         val manager = getSystemService(LOCATION_SERVICE) as LocationManager
-        // Un premier fix GPS peut prendre des minutes : on demarre sur la
-        // derniere position connue, le suivi prendra le relais.
         val last = manager.allProviders
             .mapNotNull { manager.getLastKnownLocation(it) }
             .maxByOrNull { it.time }
 
-        when {
-            last != null -> onPlayerMoved(GeoPoint(last.latitude, last.longitude))
-            manager.allProviders.none { manager.isProviderEnabled(it) } ->
-                binding.status.setText(R.string.location_off)
-            else -> binding.status.setText(R.string.searching_position)
+        if (last != null) {
+            locationProvider.onLocationChanged(last)
+            return true
+        }
+        val anyProviderOn = manager.allProviders.any { manager.isProviderEnabled(it) }
+        showStatus(if (anyProviderOn) R.string.searching_position else R.string.location_off)
+        return false
+    }
+
+    private fun retryUntilLocated() {
+        lifecycleScope.launch {
+            while (spawnedAt == null) {
+                delay(RETRY_MS)
+                // osmdroid ne s'abonne qu'aux fournisseurs actifs au moment de
+                // l'abonnement : on le relance pour capter ceux actives depuis.
+                player.enableMyLocation()
+                useLastKnownLocation()
+            }
         }
     }
 
@@ -114,7 +139,7 @@ class MainActivity : AppCompatActivity() {
             val roads = try {
                 withContext(Dispatchers.IO) { fetchRoads(bboxAround(center), packageName) }
             } catch (e: Exception) {
-                Toast.makeText(this@MainActivity, R.string.roads_unavailable, Toast.LENGTH_LONG).show()
+                showStatus(R.string.roads_unavailable)
                 return@launch
             }
             orbs?.let { binding.mapView.overlays.remove(it) }
@@ -122,6 +147,11 @@ class MainActivity : AppCompatActivity() {
                 .also { binding.mapView.overlays.add(0, it) }
             binding.mapView.invalidate()
         }
+    }
+
+    private fun showStatus(messageId: Int) {
+        binding.status.setText(messageId)
+        binding.status.visibility = View.VISIBLE
     }
 
     private fun bboxAround(center: GeoPoint): BoundingBox {
@@ -148,5 +178,6 @@ class MainActivity : AppCompatActivity() {
         const val SPAWN_RADIUS_M = 400.0
         const val RESPAWN_M = 200.0
         const val ORB_SPACING_M = 90.0
+        const val RETRY_MS = 10_000L
     }
 }
