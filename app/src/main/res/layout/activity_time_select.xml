@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="32dp"
+    tools:context=".TimeSelectActivity">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="@string/choose_duration"
+        android:textSize="22sp" />
+
+    <Button
+        android:id="@+id/duration5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/duration_5" />
+
+    <Button
+        android:id="@+id/duration10"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/duration_10" />
+
+    <Button
+        android:id="@+id/duration15"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/duration_15" />
+
+    <Button
+        android:id="@+id/duration30"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/duration_30" />
+
+</LinearLayout>
