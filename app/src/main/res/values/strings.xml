@@ -5,8 +5,5 @@
     <string name="location_off">Localisation désactivée sur l\'appareil</string>
     <string name="searching_position">Recherche de ta position…</string>
     <string name="choose_duration">Durée de la partie</string>
-    <string name="duration_5">5 minutes</string>
-    <string name="duration_10">10 minutes</string>
-    <string name="duration_15">15 minutes</string>
-    <string name="duration_30">30 minutes</string>
+    <string name="minutes">%1$d minutes</string>
 </resources>

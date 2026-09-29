@@ -6,12 +6,26 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
-import android.view.View
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.maxim.paclearn.databinding.ActivityMainBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -20,6 +34,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.IMyLocationProvider
@@ -27,19 +42,22 @@ import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import kotlin.math.cos
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
-    private lateinit var binding: ActivityMainBinding
+    private lateinit var mapView: MapView
     private lateinit var locationProvider: GpsMyLocationProvider
     private lateinit var player: MyLocationNewOverlay
     private var orbs: OrbOverlay? = null
     private var spawnedAt: GeoPoint? = null
 
+    // Seul etat affiche par Compose : le reste du jeu vit dans la carte osmdroid.
+    private var status by mutableStateOf<Int?>(R.string.searching_position)
+
     private val askLocation = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         if (grants.values.any { it }) startTracking()
-        else showStatus(R.string.location_denied)
+        else status = R.string.location_denied
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,24 +69,39 @@ class MainActivity : AppCompatActivity() {
             osmdroidTileCache = File(osmdroidBasePath, "tiles")
         }
 
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        showStatus(R.string.searching_position)
+        mapView = MapView(this).apply {
+            setTileSource(TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            controller.setZoom(PLAY_ZOOM)
+            overlays.add(CopyrightOverlay(context))
+        }
 
         locationProvider = GpsMyLocationProvider(this)
-        player = object : MyLocationNewOverlay(locationProvider, binding.mapView) {
+        player = object : MyLocationNewOverlay(locationProvider, mapView) {
             override fun onLocationChanged(location: Location, source: IMyLocationProvider?) {
                 super.onLocationChanged(location, source)
                 onPlayerMoved(GeoPoint(location.latitude, location.longitude))
             }
         }
+        mapView.overlays.add(player)
 
-        binding.mapView.apply {
-            setTileSource(TileSourceFactory.MAPNIK)
-            setMultiTouchControls(true)
-            controller.setZoom(PLAY_ZOOM)
-            overlays.add(CopyrightOverlay(context))
-            overlays.add(player)
+        setContent {
+            MaterialTheme {
+                Box(Modifier.fillMaxSize()) {
+                    AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+                    status?.let { message ->
+                        Text(
+                            text = stringResource(message),
+                            color = Color.White,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(12.dp)
+                                .background(Color(0xCC000000))
+                                .padding(10.dp)
+                        )
+                    }
+                }
+            }
         }
 
         if (hasLocationPermission()) startTracking()
@@ -84,11 +117,8 @@ class MainActivity : AppCompatActivity() {
                 PackageManager.PERMISSION_GRANTED
 
     private fun startTracking() {
-        // Le suivi continu : chaque nouvelle position redessine le personnage
-        // et recentre la carte.
         player.enableMyLocation()
         player.enableFollowLocation()
-
         useLastKnownLocation()
         retryUntilLocated()
     }
@@ -99,7 +129,7 @@ class MainActivity : AppCompatActivity() {
      * que le personnage soit dessine au lieu d'attendre un point tout neuf.
      */
     @SuppressLint("MissingPermission")
-    private fun useLastKnownLocation(): Boolean {
+    private fun useLastKnownLocation() {
         val manager = getSystemService(LOCATION_SERVICE) as LocationManager
         val last = manager.allProviders
             .mapNotNull { manager.getLastKnownLocation(it) }
@@ -107,11 +137,10 @@ class MainActivity : AppCompatActivity() {
 
         if (last != null) {
             locationProvider.onLocationChanged(last)
-            return true
+            return
         }
         val anyProviderOn = manager.allProviders.any { manager.isProviderEnabled(it) }
-        showStatus(if (anyProviderOn) R.string.searching_position else R.string.location_off)
-        return false
+        status = if (anyProviderOn) R.string.searching_position else R.string.location_off
     }
 
     private fun retryUntilLocated() {
@@ -127,9 +156,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onPlayerMoved(position: GeoPoint) {
-        binding.status.visibility = View.GONE
+        status = null
         val from = spawnedAt
-        if (from == null) binding.mapView.controller.setCenter(position)
+        if (from == null) mapView.controller.setCenter(position)
         if (from == null || from.distanceToAsDouble(position) > RESPAWN_M) spawn(position)
     }
 
@@ -139,19 +168,14 @@ class MainActivity : AppCompatActivity() {
             val roads = try {
                 withContext(Dispatchers.IO) { fetchRoads(bboxAround(center), packageName) }
             } catch (e: Exception) {
-                showStatus(R.string.roads_unavailable)
+                status = R.string.roads_unavailable
                 return@launch
             }
-            orbs?.let { binding.mapView.overlays.remove(it) }
+            orbs?.let { mapView.overlays.remove(it) }
             orbs = OrbOverlay(orbsAlong(roads, ORB_SPACING_M), resources.displayMetrics.density)
-                .also { binding.mapView.overlays.add(0, it) }
-            binding.mapView.invalidate()
+                .also { mapView.overlays.add(0, it) }
+            mapView.invalidate()
         }
-    }
-
-    private fun showStatus(messageId: Int) {
-        binding.status.setText(messageId)
-        binding.status.visibility = View.VISIBLE
     }
 
     private fun bboxAround(center: GeoPoint): BoundingBox {
@@ -165,11 +189,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        binding.mapView.onResume()
+        mapView.onResume()
     }
 
     override fun onPause() {
-        binding.mapView.onPause()
+        mapView.onPause()
         super.onPause()
     }
 
