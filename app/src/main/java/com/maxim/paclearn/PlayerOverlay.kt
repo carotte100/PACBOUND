@@ -20,8 +20,8 @@ class PlayerOverlay(density: Float) : Overlay() {
     var heading: Float = 0f
 
     private val coneRadius = 75 * density
-    private val bodyRadius = 9 * density
-    private val ringWidth = 3.5f * density
+    private val faceRadius = 14 * density
+    private val ringWidth = 2.5f * density
 
     // Degrade centre sur le joueur : le champ de vision s'estompe avec la distance.
     private val coneShader = RadialGradient(
@@ -32,11 +32,19 @@ class PlayerOverlay(density: Float) : Overlay() {
     )
     private val conePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = coneShader }
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-    private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(32, 120, 230) }
+    private val facePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 221, 0) }
+    private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
+    private val smilePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.BLACK
+        style = Paint.Style.STROKE
+        strokeWidth = faceRadius * 0.16f
+        strokeCap = Paint.Cap.ROUND
+    }
 
     private val shaderMatrix = Matrix()
     private val coneBounds = RectF()
     private val conePath = Path()
+    private val smileBounds = RectF()
     private val point = Point()
 
     override fun draw(canvas: Canvas, projection: Projection) {
@@ -56,8 +64,32 @@ class PlayerOverlay(density: Float) : Overlay() {
         conePath.close()
         canvas.drawPath(conePath, conePaint)
 
-        canvas.drawCircle(x, y, bodyRadius + ringWidth, ringPaint)
-        canvas.drawCircle(x, y, bodyRadius, bodyPaint)
+        drawSmiley(canvas, x, y)
+    }
+
+    /** Le visage reste droit : c'est le cone qui indique la direction. */
+    private fun drawSmiley(canvas: Canvas, x: Float, y: Float) {
+        canvas.drawCircle(x, y, faceRadius + ringWidth, ringPaint)
+        canvas.drawCircle(x, y, faceRadius, facePaint)
+
+        val eyeX = faceRadius * 0.34f
+        val eyeY = y - faceRadius * 0.22f
+        canvas.drawOval(
+            x - eyeX - faceRadius * 0.12f, eyeY - faceRadius * 0.20f,
+            x - eyeX + faceRadius * 0.12f, eyeY + faceRadius * 0.20f,
+            eyePaint
+        )
+        canvas.drawOval(
+            x + eyeX - faceRadius * 0.12f, eyeY - faceRadius * 0.20f,
+            x + eyeX + faceRadius * 0.12f, eyeY + faceRadius * 0.20f,
+            eyePaint
+        )
+
+        smileBounds.set(
+            x - faceRadius * 0.55f, y - faceRadius * 0.35f,
+            x + faceRadius * 0.55f, y + faceRadius * 0.55f
+        )
+        canvas.drawArc(smileBounds, 25f, 130f, false, smilePaint)
     }
 
     private companion object {
