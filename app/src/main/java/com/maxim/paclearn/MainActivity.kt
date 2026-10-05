@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -50,7 +51,9 @@ class MainActivity : ComponentActivity() {
     private var orbs: OrbOverlay? = null
     private var spawnedAt: GeoPoint? = null
 
-    // Seul etat affiche par Compose : le reste du jeu vit dans la carte osmdroid.
+    private var money by mutableStateOf(0)
+    private var time by mutableStateOf(0) // temps restant en sec
+
     private var status by mutableStateOf<Int?>(R.string.searching_position)
 
     private val askLocation = registerForActivityResult(
@@ -76,6 +79,9 @@ class MainActivity : ComponentActivity() {
             overlays.add(CopyrightOverlay(context))
         }
 
+        // Duree choisie sur l'ecran d'accueil, convertie en secondes.
+        time = intent.getIntExtra(TimeSelectActivity.EXTRA_MINUTES, DEFAULT_MINUTES) * 60
+
         locationProvider = GpsMyLocationProvider(this)
         player = object : MyLocationNewOverlay(locationProvider, mapView) {
             override fun onLocationChanged(location: Location, source: IMyLocationProvider?) {
@@ -89,6 +95,28 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+
+                    Text(
+                        text = timeConverter(),
+                        color = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .width(120.dp)
+                            .padding(12.dp)
+                            .background(Color(0xCC000000))
+                            .padding(10.dp)
+                    )
+
+                    Text(
+                        text = "$money €",
+                        color = Color.White,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .background(Color(0xCC000000))
+                            .padding(10.dp)
+                    )
+
                     status?.let { message ->
                         Text(
                             text = stringResource(message),
@@ -108,6 +136,23 @@ class MainActivity : ComponentActivity() {
         else askLocation.launch(
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
+
+        startCountdown()
+    }
+
+    private fun startCountdown() {
+        lifecycleScope.launch {
+            while (time > 0) {
+                delay(1000)
+                time--
+            }
+            onTimeUp()
+        }
+    }
+
+    private fun onTimeUp() {
+        // Fin de partie : pour l'instant on revient a l'ecran de choix.
+        finish()
     }
 
     private fun hasLocationPermission() =
@@ -121,6 +166,13 @@ class MainActivity : ComponentActivity() {
         player.enableFollowLocation()
         useLastKnownLocation()
         retryUntilLocated()
+    }
+
+    private fun timeConverter(): String {
+        val h = time / 3600
+        val m = (time % 3600) / 60
+        val s = time % 60
+        return "%02d:%02d:%02d".format(h, m, s)
     }
 
     /**
@@ -203,5 +255,6 @@ class MainActivity : ComponentActivity() {
         const val RESPAWN_M = 200.0
         const val ORB_SPACING_M = 90.0
         const val RETRY_MS = 10_000L
+        const val DEFAULT_MINUTES = 5
     }
 }
