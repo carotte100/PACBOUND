@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,6 +29,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,21 +39,28 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.CopyrightOverlay
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.IMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 import java.io.File
 import kotlin.math.cos
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var mapView: MapView
-    private lateinit var locationProvider: GpsMyLocationProvider
-    private lateinit var player: MyLocationNewOverlay
     private lateinit var playerOverlay: PlayerOverlay
     private lateinit var compass: Compass
     private var orbs: OrbOverlay? = null
     private var spawnedAt: GeoPoint? = null
+    private var spawnJob: Job? = null
+
+    private val locationManager by lazy { getSystemService(LOCATION_SERVICE) as LocationManager }
+    private var lastFix: Location? = null
+
+    private val locationListener = object : LocationListener {
+        override fun onLocationChanged(location: Location) = acceptFix(location)
+        @Deprecated("Exige par LocationListener avant l'API 29")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
+        override fun onProviderEnabled(provider: String) = Unit
+        override fun onProviderDisabled(provider: String) = Unit
+    }
 
     private var money by mutableStateOf(0)
     private var time by mutableStateOf(0) // temps restant en sec
@@ -84,15 +93,6 @@ class MainActivity : ComponentActivity() {
         // Duree choisie sur l'ecran d'accueil, convertie en secondes.
         time = intent.getIntExtra(TimeSelectActivity.EXTRA_MINUTES, DEFAULT_MINUTES) * 60
 
-        locationProvider = GpsMyLocationProvider(this)
-        player = object : MyLocationNewOverlay(locationProvider, mapView) {
-            override fun onLocationChanged(location: Location, source: IMyLocationProvider?) {
-                super.onLocationChanged(location, source)
-                onPlayerMoved(GeoPoint(location.latitude, location.longitude))
-            }
-        }
-        // player n'est volontairement pas ajoute aux calques : on garde son suivi
-        // et son recentrage, mais on dessine nous-memes le joueur.
         playerOverlay = PlayerOverlay(resources.displayMetrics.density)
         mapView.overlays.add(playerOverlay)
 
@@ -171,11 +171,45 @@ class MainActivity : ComponentActivity() {
                 ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
 
+    @SuppressLint("MissingPermission")
     private fun startTracking() {
-        player.enableMyLocation()
-        player.enableFollowLocation()
+        for (provider in TRACKED_PROVIDERS) {
+            if (provider in locationManager.allProviders) {
+                locationManager.requestLocationUpdates(provider, UPDATE_MS, 0f, locationListener)
+            }
+        }
         useLastKnownLocation()
         retryUntilLocated()
+    }
+
+    /**
+     * Le Wi-Fi renvoie des positions precises a quelques centaines de metres :
+     * melangees aux points GPS, elles teleportent le joueur. On compare donc
+     * chaque point a celui en cours plutot que de fixer un seuil absolu, qui
+     * rejetterait tout en interieur. Les micro-ecarts sont ignores pour que le
+     * personnage ne tremble pas a l'arret.
+     */
+    private fun isPlausible(candidate: Location): Boolean {
+        val previous = lastFix ?: return true
+
+        val candidateError = if (candidate.hasAccuracy()) candidate.accuracy else WORST_ACCURACY_M
+        val previousError = if (previous.hasAccuracy()) previous.accuracy else WORST_ACCURACY_M
+
+        if (candidateError < previousError / 2f) return true
+        if (candidateError > previousError * 2f) return false
+
+        val moved = candidate.distanceTo(previous)
+        if (moved < MIN_MOVE_M) return false
+
+        val seconds = (candidate.time - previous.time) / 1000.0
+        if (seconds > 0 && moved / seconds > MAX_SPEED_MS) return false
+        return true
+    }
+
+    private fun acceptFix(location: Location) {
+        if (!isPlausible(location)) return
+        lastFix = location
+        onPlayerMoved(GeoPoint(location.latitude, location.longitude))
     }
 
     private fun timeConverter(): String {
@@ -186,22 +220,20 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Un premier point GPS peut prendre des minutes en interieur. On reprend la
-     * derniere position connue du telephone en passant par le fournisseur, pour
-     * que le personnage soit dessine au lieu d'attendre un point tout neuf.
+     * Un premier point GPS peut prendre des minutes en interieur : on demarre
+     * sur la derniere position connue du telephone, si elle est credible.
      */
     @SuppressLint("MissingPermission")
     private fun useLastKnownLocation() {
-        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
-        val last = manager.allProviders
-            .mapNotNull { manager.getLastKnownLocation(it) }
+        val last = locationManager.allProviders
+            .mapNotNull { locationManager.getLastKnownLocation(it) }
             .maxByOrNull { it.time }
 
         if (last != null) {
-            locationProvider.onLocationChanged(last)
+            acceptFix(last)
             return
         }
-        val anyProviderOn = manager.allProviders.any { manager.isProviderEnabled(it) }
+        val anyProviderOn = locationManager.allProviders.any { locationManager.isProviderEnabled(it) }
         status = if (anyProviderOn) R.string.searching_position else R.string.location_off
     }
 
@@ -209,9 +241,6 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             while (spawnedAt == null) {
                 delay(RETRY_MS)
-                // osmdroid ne s'abonne qu'aux fournisseurs actifs au moment de
-                // l'abonnement : on le relance pour capter ceux actives depuis.
-                player.enableMyLocation()
                 useLastKnownLocation()
             }
         }
@@ -220,26 +249,35 @@ class MainActivity : ComponentActivity() {
     private fun onPlayerMoved(position: GeoPoint) {
         status = null
         playerOverlay.position = position
+        mapView.controller.animateTo(position)
         mapView.invalidate()
 
         val from = spawnedAt
-        if (from == null) mapView.controller.setCenter(position)
         if (from == null || from.distanceToAsDouble(position) > RESPAWN_M) spawn(position)
     }
 
     private fun spawn(center: GeoPoint) {
         spawnedAt = center
-        lifecycleScope.launch {
-            val roads = try {
-                withContext(Dispatchers.IO) { fetchRoads(bboxAround(center), packageName) }
-            } catch (e: Exception) {
-                status = R.string.roads_unavailable
-                return@launch
+        spawnJob?.cancel()
+        // Les serveurs Overpass publics tombent regulierement : on reessaie
+        // au lieu de laisser la partie sans orbes.
+        spawnJob = lifecycleScope.launch {
+            while (true) {
+                try {
+                    val roads = withContext(Dispatchers.IO) {
+                        fetchRoads(bboxAround(center), packageName)
+                    }
+                    orbs?.let { mapView.overlays.remove(it) }
+                    orbs = OrbOverlay(orbsAlong(roads, ORB_SPACING_M), resources.displayMetrics.density)
+                        .also { mapView.overlays.add(0, it) }
+                    mapView.invalidate()
+                    status = null
+                    return@launch
+                } catch (e: Exception) {
+                    status = R.string.roads_unavailable
+                    delay(RETRY_MS)
+                }
             }
-            orbs?.let { mapView.overlays.remove(it) }
-            orbs = OrbOverlay(orbsAlong(roads, ORB_SPACING_M), resources.displayMetrics.density)
-                .also { mapView.overlays.add(0, it) }
-            mapView.invalidate()
         }
     }
 
@@ -264,6 +302,12 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onDestroy() {
+        // Le suivi continue ecran eteint pendant la partie, mais pas apres.
+        locationManager.removeUpdates(locationListener)
+        super.onDestroy()
+    }
+
     private companion object {
         const val PLAY_ZOOM = 18.0
         const val SPAWN_RADIUS_M = 400.0
@@ -271,5 +315,11 @@ class MainActivity : ComponentActivity() {
         const val ORB_SPACING_M = 90.0
         const val RETRY_MS = 10_000L
         const val DEFAULT_MINUTES = 5
+
+        val TRACKED_PROVIDERS = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        const val UPDATE_MS = 1_000L
+        const val WORST_ACCURACY_M = 100f // hypothese quand le point n'annonce rien
+        const val MIN_MOVE_M = 3f         // en-deca, c'est du tremblement sur place
+        const val MAX_SPEED_MS = 8.0      // un pieton ne sprinte pas plus vite
     }
 }
