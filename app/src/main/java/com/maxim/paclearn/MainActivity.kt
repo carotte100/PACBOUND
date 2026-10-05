@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var mapView: MapView
     private lateinit var locationProvider: GpsMyLocationProvider
     private lateinit var player: MyLocationNewOverlay
+    private lateinit var playerOverlay: PlayerOverlay
+    private lateinit var compass: Compass
     private var orbs: OrbOverlay? = null
     private var spawnedAt: GeoPoint? = null
 
@@ -89,7 +91,15 @@ class MainActivity : ComponentActivity() {
                 onPlayerMoved(GeoPoint(location.latitude, location.longitude))
             }
         }
-        mapView.overlays.add(player)
+        // player n'est volontairement pas ajoute aux calques : on garde son suivi
+        // et son recentrage, mais on dessine nous-memes le joueur.
+        playerOverlay = PlayerOverlay(resources.displayMetrics.density)
+        mapView.overlays.add(playerOverlay)
+
+        compass = Compass(this) { heading ->
+            playerOverlay.heading = heading
+            mapView.postInvalidate()
+        }
 
         setContent {
             MaterialTheme {
@@ -209,6 +219,9 @@ class MainActivity : ComponentActivity() {
 
     private fun onPlayerMoved(position: GeoPoint) {
         status = null
+        playerOverlay.position = position
+        mapView.invalidate()
+
         val from = spawnedAt
         if (from == null) mapView.controller.setCenter(position)
         if (from == null || from.distanceToAsDouble(position) > RESPAWN_M) spawn(position)
@@ -242,9 +255,11 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         mapView.onResume()
+        compass.start()
     }
 
     override fun onPause() {
+        compass.stop()
         mapView.onPause()
         super.onPause()
     }
