@@ -1,9 +1,12 @@
 <resources>
     <string name="app_name">PacLearn</string>
+    <string name="tagline">Ramasse un max de pièces avant la fin du chrono</string>
     <string name="roads_unavailable">Impossible de charger les rues autour de toi</string>
+    <string name="loading_map">Chargement de la carte…</string>
+    <string name="osm_attribution">© les contributeurs d\'OpenStreetMap</string>
     <string name="location_denied">Autorisation de localisation refusée</string>
     <string name="location_off">Localisation désactivée sur l\'appareil</string>
     <string name="searching_position">Recherche de ta position…</string>
     <string name="choose_duration">Durée de la partie</string>
-    <string name="minutes">%1$d minutes</string>
+    <string name="minutes_label">minutes</string>
 </resources>

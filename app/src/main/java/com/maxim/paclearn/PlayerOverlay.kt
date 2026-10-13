@@ -2,6 +2,7 @@ package com.maxim.paclearn
 
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -13,8 +14,11 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
 
-/** Le joueur : son pion, et le champ de vision oriente vers ou il regarde. */
-class PlayerOverlay(density: Float) : Overlay() {
+/**
+ * Le joueur : son pion, le champ de vision oriente vers ou il regarde, et la
+ * zone dans laquelle il ramasse les orbes.
+ */
+class PlayerOverlay(density: Float, private val collectRadiusM: Double) : Overlay() {
 
     var position: GeoPoint? = null
     var heading: Float = 0f
@@ -31,6 +35,14 @@ class PlayerOverlay(density: Float) : Overlay() {
         Shader.TileMode.CLAMP
     )
     private val conePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = coneShader }
+    // Bord blanc : il ressort sur le vert de la carte, le remplissage bleu sur le gris des rues.
+    private val zoneFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(55, 64, 156, 255) }
+    private val zoneEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(220, 255, 255, 255)
+        style = Paint.Style.STROKE
+        strokeWidth = 2f * density
+        pathEffect = DashPathEffect(floatArrayOf(6 * density, 4 * density), 0f)
+    }
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val facePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(255, 221, 0) }
     private val eyePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
@@ -52,6 +64,11 @@ class PlayerOverlay(density: Float) : Overlay() {
         projection.toPixels(here, point)
         val x = point.x.toFloat()
         val y = point.y.toFloat()
+
+        // A l'echelle reelle, calculee a la latitude du joueur : elle suit le zoom.
+        val zone = projection.metersToPixels(collectRadiusM.toFloat(), here.latitude, projection.zoomLevel)
+        canvas.drawCircle(x, y, zone, zoneFill)
+        canvas.drawCircle(x, y, zone, zoneEdge)
 
         shaderMatrix.setTranslate(x, y)
         coneShader.setLocalMatrix(shaderMatrix)

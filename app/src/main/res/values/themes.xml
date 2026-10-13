@@ -1,5 +1,8 @@
 <resources>
     <!-- Habillage de la fenetre seulement : les couleurs de l'interface sont
-         gerees par MaterialTheme cote Compose. -->
-    <style name="Theme.PacLearn" parent="android:Theme.Material.Light.NoActionBar" />
+         gerees par PacTheme cote Compose. Le fond nuit evite un flash blanc
+         au lancement, avant que Compose ne dessine. -->
+    <style name="Theme.PacLearn" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/night</item>
+    </style>
 </resources>

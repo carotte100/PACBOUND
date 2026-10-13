@@ -5,4 +5,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Meme valeur que Night dans Theme.kt -->
+    <color name="night">#FF0B1426</color>
 </resources>

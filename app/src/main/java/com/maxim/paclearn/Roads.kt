@@ -20,25 +20,36 @@ private val WALKABLE = listOf(
     "primary", "secondary", "tertiary", "residential", "unclassified",
     "living_street", "pedestrian"
 )
+private const val LANE_WIDTH_M = 3.0
 
-/** Trace des rues praticables dans la zone, via l'API Overpass d'OpenStreetMap. */
-fun fetchRoads(bbox: BoundingBox, userAgent: String): List<List<GeoPoint>> {
+/** Une rue praticable : son axe, tel qu'OSM le trace, et la demi-largeur de sa chaussee. */
+class Road(val points: List<GeoPoint>, val halfWidth: Double)
+
+/** Ce qu'il faut connaitre d'une zone pour y poser les orbes. */
+class Area(val roads: List<Road>, val buildings: List<List<GeoPoint>>)
+
+/** Rues praticables et batiments de la zone, via l'API Overpass d'OpenStreetMap. */
+fun fetchArea(bbox: BoundingBox, userAgent: String): Area {
     // Une union de valeurs exactes plutot qu'une regex : la regex force
     // Overpass a parcourir toutes les voies et finit en timeout.
     val area = "${bbox.latSouth},${bbox.lonWest},${bbox.latNorth},${bbox.lonEast}"
     val clauses = WALKABLE.joinToString("\n") { """way["highway"="$it"]($area);""" }
+    // Les batiments sortent sans leurs tags (skel) : seule leur forme sert, et
+    // c'est ce qui les distingue des rues dans la reponse.
     val query = """
         [out:json][timeout:25];
         (
         $clauses
         );
         out geom;
+        way["building"]($area);
+        out skel geom;
     """.trimIndent()
 
     var failure: Exception? = null
     for (endpoint in OVERPASS_ENDPOINTS) {
         try {
-            return parseRoads(post(endpoint, query, userAgent))
+            return parseArea(post(endpoint, query, userAgent))
         } catch (e: Exception) {
             failure = e
         }
@@ -67,44 +78,52 @@ private fun post(endpoint: String, query: String, userAgent: String): String {
     }
 }
 
-private fun parseRoads(json: String): List<List<GeoPoint>> {
+private fun parseArea(json: String): Area {
+    val roads = ArrayList<Road>()
+    val buildings = ArrayList<List<GeoPoint>>()
     val elements = JSONObject(json).getJSONArray("elements")
-    return (0 until elements.length()).mapNotNull { i ->
-        val geometry = elements.getJSONObject(i).optJSONArray("geometry") ?: return@mapNotNull null
-        (0 until geometry.length()).map { j ->
+    for (i in 0 until elements.length()) {
+        val element = elements.getJSONObject(i)
+        val geometry = element.optJSONArray("geometry") ?: continue
+        val points = (0 until geometry.length()).map { j ->
             val node = geometry.getJSONObject(j)
             GeoPoint(node.getDouble("lat"), node.getDouble("lon"))
-        }.takeIf { it.size >= 2 }
+        }
+        val tags = element.optJSONObject("tags")
+        when {
+            tags != null && points.size >= 2 -> roads.add(Road(points, halfWidthOf(tags)))
+            tags == null && points.size >= 3 -> buildings.add(points)
+        }
+    }
+    return Area(roads, buildings)
+}
+
+/**
+ * OSM ne trace que l'axe des rues : pour trouver leurs bords, on prend la
+ * largeur si elle est renseignee, sinon le nombre de voies, sinon une valeur
+ * typique du type de rue.
+ */
+private fun halfWidthOf(tags: JSONObject): Double {
+    val highway = tags.optString("highway")
+    // Rue pietonne ou partagee : on marche au milieu, pas de bord a chercher.
+    if (highway == "pedestrian" || highway == "living_street") return 0.0
+
+    // "width" s'ecrit parfois "6 m" : on ne garde que le nombre en tete.
+    tags.optString("width").takeWhile { it.isDigit() || it == '.' }.toDoubleOrNull()
+        ?.let { return it / 2 }
+    tags.optString("lanes").toIntOrNull()?.let { return it * LANE_WIDTH_M / 2 }
+    return when (highway) {
+        "primary" -> 5.0
+        "secondary" -> 4.5
+        "tertiary" -> 4.0
+        else -> 3.0
     }
 }
 
-/** Un orbe tous les [spacing] metres le long des rues. */
-fun orbsAlong(roads: List<List<GeoPoint>>, spacing: Double): List<GeoPoint> {
-    val seen = HashSet<Long>()
-    val orbs = ArrayList<GeoPoint>()
-    for (road in roads) {
-        var carry = 0.0
-        for (i in 0 until road.size - 1) {
-            val a = road[i]
-            val b = road[i + 1]
-            val length = a.distanceToAsDouble(b)
-            if (length == 0.0) continue
-            var offset = spacing - carry
-            while (offset <= length) {
-                val t = offset / length
-                val orb = GeoPoint(
-                    a.latitude + (b.latitude - a.latitude) * t,
-                    a.longitude + (b.longitude - a.longitude) * t
-                )
-                // Les rues partagent leurs noeuds aux carrefours : une cellule
-                // d'environ 10 m evite d'y empiler plusieurs orbes.
-                val cell = (Math.round(orb.latitude * 1e4) shl 32) or
-                        (Math.round(orb.longitude * 1e4) and 0xFFFFFFFFL)
-                if (seen.add(cell)) orbs.add(orb)
-                offset += spacing
-            }
-            carry = length - (offset - spacing)
-        }
-    }
-    return orbs
-}
+/**
+ * Identifiant de la cellule d'environ 10 m qui contient [point]. Une meme rue
+ * regenere ses orbes aux memes coordonnees, donc a la meme cellule : c'est ce
+ * qui permet de reconnaitre un orbe deja ramasse apres un rechargement.
+ */
+fun cellOf(point: GeoPoint): Long =
+    (Math.round(point.latitude * 1e4) shl 32) or (Math.round(point.longitude * 1e4) and 0xFFFFFFFFL)

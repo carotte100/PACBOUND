@@ -3,42 +3,37 @@ package com.maxim.paclearn
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.CopyrightOverlay
 import java.io.File
 import kotlin.math.cos
 
@@ -47,7 +42,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var mapView: MapView
     private lateinit var playerOverlay: PlayerOverlay
     private lateinit var compass: Compass
+    private var streetMap: StreetMapOverlay? = null
     private var orbs: OrbOverlay? = null
+    private val collected = HashSet<Long>() // cellules (cellOf) des orbes deja ramasses
     private var spawnedAt: GeoPoint? = null
     private var spawnJob: Job? = null
 
@@ -76,6 +73,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // La carte passe sous les barres systeme, aux icones sombres sur le vert.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
 
         Configuration.getInstance().apply {
             userAgentValue = packageName
@@ -84,16 +86,27 @@ class MainActivity : ComponentActivity() {
         }
 
         mapView = MapView(this).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            // Pas de tuiles : StreetMapOverlay dessine les rues sur ce fond vert.
+            overlayManager.tilesOverlay.isEnabled = false
+            setUseDataConnection(false)
+            // Surtout pas setBackgroundColor : osmdroid le detourne vers la couleur
+            // d'attente des tuiles, qui ne sont plus dessinees, et la carte restait
+            // transparente sur le fond nuit de la fenetre.
+            background = ColorDrawable(StreetMapOverlay.GROUND)
             setMultiTouchControls(true)
+            // Le pincement suffit : les boutons +/- encombraient l'ecran.
+            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+            // Pas de dezoom : la partie se joue autour du joueur, et plus loin on
+            // verrait le bord de la zone chargee. Zoomer pour voir de pres reste possible.
+            setMinZoomLevel(PLAY_ZOOM)
+            setMaxZoomLevel(MAX_ZOOM)
             controller.setZoom(PLAY_ZOOM)
-            overlays.add(CopyrightOverlay(context))
         }
 
         // Duree choisie sur l'ecran d'accueil, convertie en secondes.
         time = intent.getIntExtra(TimeSelectActivity.EXTRA_MINUTES, DEFAULT_MINUTES) * 60
 
-        playerOverlay = PlayerOverlay(resources.displayMetrics.density)
+        playerOverlay = PlayerOverlay(resources.displayMetrics.density, COLLECT_RADIUS_M)
         mapView.overlays.add(playerOverlay)
 
         compass = Compass(this) { heading ->
@@ -102,42 +115,10 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
+            PacTheme {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-
-                    Text(
-                        text = timeConverter(),
-                        color = Color.White,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .width(120.dp)
-                            .padding(12.dp)
-                            .background(Color(0xCC000000))
-                            .padding(10.dp)
-                    )
-
-                    Text(
-                        text = "$money €",
-                        color = Color.White,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp)
-                            .background(Color(0xCC000000))
-                            .padding(10.dp)
-                    )
-
-                    status?.let { message ->
-                        Text(
-                            text = stringResource(message),
-                            color = Color.White,
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(12.dp)
-                                .background(Color(0xCC000000))
-                                .padding(10.dp)
-                        )
-                    }
+                    Hud(secondsLeft = time, money = money, status = status)
                 }
             }
         }
@@ -192,31 +173,36 @@ class MainActivity : ComponentActivity() {
     private fun isPlausible(candidate: Location): Boolean {
         val previous = lastFix ?: return true
 
-        val candidateError = if (candidate.hasAccuracy()) candidate.accuracy else WORST_ACCURACY_M
-        val previousError = if (previous.hasAccuracy()) previous.accuracy else WORST_ACCURACY_M
-
+        val candidateError = errorOf(candidate)
+        val previousError = errorOf(previous)
         if (candidateError < previousError / 2f) return true
-        if (candidateError > previousError * 2f) return false
+
+        // Horloge monotone : l'heure d'un point GPS vient des satellites, celle
+        // d'un point Wi-Fi vient du telephone, que rien ne resynchronise hors ligne.
+        val seconds = (candidate.elapsedRealtimeNanos - previous.elapsedRealtimeNanos)
+            .coerceAtLeast(0) / 1e9
+
+        // Un point perd sa precision en vieillissant, le joueur ayant pu marcher
+        // depuis. Sans cela, un vieux point tres precis (derniere position connue,
+        // dernier point avant les arbres) bloquait tous les points GPS suivants,
+        // et hors ligne le GPS est la seule source : le joueur restait fige.
+        val previousErrorNow = previousError + seconds * WALK_SPEED_MS
+        if (candidateError > previousErrorNow * 2) return false
 
         val moved = candidate.distanceTo(previous)
         if (moved < MIN_MOVE_M) return false
 
-        val seconds = (candidate.time - previous.time) / 1000.0
         if (seconds > 0 && moved / seconds > MAX_SPEED_MS) return false
         return true
     }
+
+    private fun errorOf(location: Location) =
+        if (location.hasAccuracy()) location.accuracy else WORST_ACCURACY_M
 
     private fun acceptFix(location: Location) {
         if (!isPlausible(location)) return
         lastFix = location
         onPlayerMoved(GeoPoint(location.latitude, location.longitude))
-    }
-
-    private fun timeConverter(): String {
-        val h = time / 3600
-        val m = (time % 3600) / 60
-        val s = time % 60
-        return "%02d:%02d:%02d".format(h, m, s)
     }
 
     /**
@@ -227,7 +213,7 @@ class MainActivity : ComponentActivity() {
     private fun useLastKnownLocation() {
         val last = locationManager.allProviders
             .mapNotNull { locationManager.getLastKnownLocation(it) }
-            .maxByOrNull { it.time }
+            .maxByOrNull { it.elapsedRealtimeNanos }
 
         if (last != null) {
             acceptFix(last)
@@ -247,32 +233,68 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun onPlayerMoved(position: GeoPoint) {
-        status = null
+        // Seuls les messages de recherche tombent : celui du chargement des
+        // pieces reste tant qu'elles ne sont pas arrivees.
+        if (status == R.string.searching_position || status == R.string.location_off) status = null
         playerOverlay.position = position
         mapView.controller.animateTo(position)
         mapView.invalidate()
+
+        collectOrbs(position)
 
         val from = spawnedAt
         if (from == null || from.distanceToAsDouble(position) > RESPAWN_M) spawn(position)
     }
 
+    /** Ramasse les orbes autour du joueur et credite leur valeur. */
+    private fun collectOrbs(position: GeoPoint) {
+        val overlay = orbs ?: return // rues encore en chargement : rien a ramasser
+        val picked = overlay.collectNear(position, COLLECT_RADIUS_M)
+        if (picked.isEmpty()) return
+
+        // money est un etat Compose : le compteur a l'ecran se met a jour seul.
+        money += picked.size * ORB_VALUE
+        // Retenus pour qu'ils ne reapparaissent pas au prochain rechargement des rues.
+        picked.forEach { collected.add(cellOf(it)) }
+        mapView.invalidate()
+    }
+
+    /** Ecarte les orbes deja ramasses d'une zone qu'on vient de (re)charger. */
+    private fun withoutCollected(fresh: List<GeoPoint>): List<GeoPoint> =
+        // filterNot fait l'inverse de filter : il ecarte ceux qui verifient la condition.
+        fresh.filterNot { cellOf(it) in collected }
+
     private fun spawn(center: GeoPoint) {
         spawnedAt = center
         spawnJob?.cancel()
+        if (orbs == null) status = R.string.loading_map
         // Les serveurs Overpass publics tombent regulierement : on reessaie
         // au lieu de laisser la partie sans orbes.
         spawnJob = lifecycleScope.launch {
             while (true) {
                 try {
-                    val roads = withContext(Dispatchers.IO) {
-                        fetchRoads(bboxAround(center), packageName)
+                    val area = withContext(Dispatchers.IO) {
+                        fetchArea(bboxAround(center), packageName)
                     }
+                    val density = resources.displayMetrics.density
+                    // Des milliers de tests contre les batiments : hors du fil de l'interface.
+                    val (placed, map) = withContext(Dispatchers.Default) {
+                        placeOrbs(area, center, SPAWN_RADIUS_M, ORB_SPACING_M) to
+                            StreetMapOverlay(area, center, density)
+                    }
+                    // L'ancienne zone reste affichee jusqu'ici : pas de carte vide pendant le chargement.
+                    streetMap?.let { mapView.overlays.remove(it) }
                     orbs?.let { mapView.overlays.remove(it) }
-                    orbs = OrbOverlay(orbsAlong(roads, ORB_SPACING_M), resources.displayMetrics.density)
-                        .also { mapView.overlays.add(0, it) }
+                    streetMap = map.also { mapView.overlays.add(0, it) }
+                    orbs = OrbOverlay(withoutCollected(placed), density)
+                        .also { mapView.overlays.add(1, it) }
                     mapView.invalidate()
                     status = null
                     return@launch
+                } catch (e: CancellationException) {
+                    // Remplace par un chargement plus proche du joueur : ce n'est
+                    // pas un echec, et afficher l'erreur ecraserait son message.
+                    throw e
                 } catch (e: Exception) {
                     status = R.string.roads_unavailable
                     delay(RETRY_MS)
@@ -309,10 +331,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
-        const val PLAY_ZOOM = 18.0
+        // Au zoom 18, la zone de ramassage de 15 m est plus petite que le
+        // smiley et disparait dessous ; au 19, elle deborde autour de lui.
+        const val PLAY_ZOOM = 19.0
+        const val MAX_ZOOM = 21.0
         const val SPAWN_RADIUS_M = 400.0
         const val RESPAWN_M = 200.0
         const val ORB_SPACING_M = 90.0
+        const val COLLECT_RADIUS_M = 15.0 // le GPS d'un telephone se trompe de 5 a 15 m
+        const val ORB_VALUE = 1           // euros gagnes par orbe
         const val RETRY_MS = 10_000L
         const val DEFAULT_MINUTES = 5
 
@@ -321,5 +348,6 @@ class MainActivity : ComponentActivity() {
         const val WORST_ACCURACY_M = 100f // hypothese quand le point n'annonce rien
         const val MIN_MOVE_M = 3f         // en-deca, c'est du tremblement sur place
         const val MAX_SPEED_MS = 8.0      // un pieton ne sprinte pas plus vite
+        const val WALK_SPEED_MS = 1.5     // derive supposee d'un point qui vieillit
     }
 }
