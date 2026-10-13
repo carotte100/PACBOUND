@@ -2,9 +2,14 @@ package com.maxim.paclearn
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -30,13 +35,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.config.Configuration
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import java.io.File
-import kotlin.math.cos
+import kotlin.math.abs
 
+/** L'ecran de jeu : la carte, le joueur qui s'y deplace, les orbes a ramasser et le chrono. */
 class MainActivity : ComponentActivity() {
 
     private lateinit var mapView: MapView
@@ -59,9 +64,9 @@ class MainActivity : ComponentActivity() {
         override fun onProviderDisabled(provider: String) = Unit
     }
 
+    // Etats Compose : le HUD se redessine seul quand ils changent.
     private var money by mutableStateOf(0)
     private var time by mutableStateOf(0) // temps restant en sec
-
     private var status by mutableStateOf<Int?>(R.string.searching_position)
 
     private val askLocation = registerForActivityResult(
@@ -128,22 +133,14 @@ class MainActivity : ComponentActivity() {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
 
-        startCountdown()
-    }
-
-    private fun startCountdown() {
         lifecycleScope.launch {
             while (time > 0) {
                 delay(1000)
                 time--
             }
-            onTimeUp()
+            // Fin de partie : pour l'instant on revient a l'ecran de choix.
+            finish()
         }
-    }
-
-    private fun onTimeUp() {
-        // Fin de partie : pour l'instant on revient a l'ecran de choix.
-        finish()
     }
 
     private fun hasLocationPermission() =
@@ -160,7 +157,13 @@ class MainActivity : ComponentActivity() {
             }
         }
         useLastKnownLocation()
-        retryUntilLocated()
+        // Sans premier point, ni joueur ni orbes : on relit regulierement la derniere position.
+        lifecycleScope.launch {
+            while (spawnedAt == null) {
+                delay(RETRY_MS)
+                useLastKnownLocation()
+            }
+        }
     }
 
     /**
@@ -223,18 +226,9 @@ class MainActivity : ComponentActivity() {
         status = if (anyProviderOn) R.string.searching_position else R.string.location_off
     }
 
-    private fun retryUntilLocated() {
-        lifecycleScope.launch {
-            while (spawnedAt == null) {
-                delay(RETRY_MS)
-                useLastKnownLocation()
-            }
-        }
-    }
-
     private fun onPlayerMoved(position: GeoPoint) {
-        // Seuls les messages de recherche tombent : celui du chargement des
-        // pieces reste tant qu'elles ne sont pas arrivees.
+        // Seuls les messages de recherche tombent : celui du chargement de la
+        // carte reste tant qu'elle n'est pas arrivee.
         if (status == R.string.searching_position || status == R.string.location_off) status = null
         playerOverlay.position = position
         mapView.controller.animateTo(position)
@@ -248,33 +242,28 @@ class MainActivity : ComponentActivity() {
 
     /** Ramasse les orbes autour du joueur et credite leur valeur. */
     private fun collectOrbs(position: GeoPoint) {
-        val overlay = orbs ?: return // rues encore en chargement : rien a ramasser
+        val overlay = orbs ?: return // carte encore en chargement : rien a ramasser
         val picked = overlay.collectNear(position, COLLECT_RADIUS_M)
         if (picked.isEmpty()) return
 
-        // money est un etat Compose : le compteur a l'ecran se met a jour seul.
         money += picked.size * ORB_VALUE
         // Retenus pour qu'ils ne reapparaissent pas au prochain rechargement des rues.
         picked.forEach { collected.add(cellOf(it)) }
         mapView.invalidate()
     }
 
-    /** Ecarte les orbes deja ramasses d'une zone qu'on vient de (re)charger. */
-    private fun withoutCollected(fresh: List<GeoPoint>): List<GeoPoint> =
-        // filterNot fait l'inverse de filter : il ecarte ceux qui verifient la condition.
-        fresh.filterNot { cellOf(it) in collected }
-
+    /** Charge la zone autour de [center] : la carte a dessiner et ses orbes. */
     private fun spawn(center: GeoPoint) {
         spawnedAt = center
         spawnJob?.cancel()
         if (orbs == null) status = R.string.loading_map
         // Les serveurs Overpass publics tombent regulierement : on reessaie
-        // au lieu de laisser la partie sans orbes.
+        // au lieu de laisser la partie sans carte.
         spawnJob = lifecycleScope.launch {
             while (true) {
                 try {
                     val area = withContext(Dispatchers.IO) {
-                        fetchArea(bboxAround(center), packageName)
+                        fetchArea(center, SPAWN_RADIUS_M, packageName)
                     }
                     val density = resources.displayMetrics.density
                     // Des milliers de tests contre les batiments : hors du fil de l'interface.
@@ -286,7 +275,7 @@ class MainActivity : ComponentActivity() {
                     streetMap?.let { mapView.overlays.remove(it) }
                     orbs?.let { mapView.overlays.remove(it) }
                     streetMap = map.also { mapView.overlays.add(0, it) }
-                    orbs = OrbOverlay(withoutCollected(placed), density)
+                    orbs = OrbOverlay(placed.filterNot { cellOf(it) in collected }, density)
                         .also { mapView.overlays.add(1, it) }
                     mapView.invalidate()
                     status = null
@@ -301,15 +290,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    private fun bboxAround(center: GeoPoint): BoundingBox {
-        val dLat = SPAWN_RADIUS_M / 111_320.0
-        val dLon = dLat / cos(Math.toRadians(center.latitude))
-        return BoundingBox(
-            center.latitude + dLat, center.longitude + dLon,
-            center.latitude - dLat, center.longitude - dLon
-        )
     }
 
     override fun onResume() {
@@ -349,5 +329,58 @@ class MainActivity : ComponentActivity() {
         const val MIN_MOVE_M = 3f         // en-deca, c'est du tremblement sur place
         const val MAX_SPEED_MS = 8.0      // un pieton ne sprinte pas plus vite
         const val WALK_SPEED_MS = 1.5     // derive supposee d'un point qui vieillit
+    }
+}
+
+/**
+ * Cap du telephone en degres, 0 = nord. S'appuie sur le vecteur de rotation
+ * plutot que sur le capteur d'orientation, obsolete et absent de certains
+ * telephones. Suppose l'ecran en portrait.
+ */
+private class Compass(context: Context, private val onHeading: (Float) -> Unit) : SensorEventListener {
+
+    private val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val rotationVector = sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+    private val rotationMatrix = FloatArray(9)
+    private val orientation = FloatArray(3)
+
+    private var smoothed = Float.NaN
+    private var reported = Float.NaN
+
+    fun start() {
+        rotationVector?.let { sensors.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
+    }
+
+    fun stop() = sensors.unregisterListener(this)
+
+    override fun onSensorChanged(event: SensorEvent) {
+        SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+        SensorManager.getOrientation(rotationMatrix, orientation)
+        val raw = (Math.toDegrees(orientation[0].toDouble()).toFloat() + 360f) % 360f
+
+        // Le capteur est nerveux : on avance par petits pas vers la valeur
+        // visee, et on ne previent l'ecran que si le cap a vraiment bouge.
+        smoothed = if (smoothed.isNaN()) raw else smoothed + SMOOTHING * shortestTurn(smoothed, raw)
+        smoothed = (smoothed + 360f) % 360f
+
+        if (reported.isNaN() || abs(shortestTurn(reported, smoothed)) > REPORT_STEP) {
+            reported = smoothed
+            onHeading(smoothed)
+        }
+    }
+
+    /** Ecart entre deux caps, en passant par le plus court chemin (-180..180). */
+    private fun shortestTurn(from: Float, to: Float): Float {
+        var delta = to - from
+        if (delta > 180f) delta -= 360f
+        if (delta < -180f) delta += 360f
+        return delta
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+
+    private companion object {
+        const val SMOOTHING = 0.12f
+        const val REPORT_STEP = 1.5f
     }
 }
