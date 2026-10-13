@@ -1,1 +1,407 @@
-{}
+{
+  "cartes": {
+    "riven": {
+      "type_objet": "carte",
+      "nom": "Riven",
+      "set": "radiance",
+      "rarete": "rare",
+      "variant": "alt",
+      "couleur": "vert",
+      "type": "unite",
+      "cost": 4,
+      "power": 0,
+      "might": 4,
+      "tag": "riven,noxus",
+      "mots_cles": "action",
+      "image": "RAD-043"
+    },
+    "pyromacheurs": {
+      "type_objet": "carte",
+      "nom": "Pyromâcheurs",
+      "set": "origins",
+      "rarete": "commune",
+      "variant": "normale",
+      "couleur": "rouge",
+      "type": "unite",
+      "cost": 3,
+      "power": 0,
+      "might": 3,
+      "tag": "zaun",
+      "mots_cles": "action",
+      "image": "OGN-006"
+    },
+    "puissance_incontrolee": {
+      "type_objet": "carte",
+      "nom": "Puissance incontrôlée",
+      "set": "origins",
+      "rarete": "epique",
+      "variant": "normale",
+      "couleur": "bleu",
+      "type": "sort",
+      "cost": 7,
+      "power": 2,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "action",
+      "image": "OGN-123"
+    },
+    "barrage_de_canons": {
+      "type_objet": "carte",
+      "nom": "Barrage de canons",
+      "set": "origins",
+      "rarete": "commune",
+      "variant": "normale",
+      "couleur": "orange",
+      "type": "sort",
+      "cost": 2,
+      "power": 1,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "reaction",
+      "image": "OGN-127"
+    },
+    "operation_a_decouvert": {
+      "type_objet": "carte",
+      "nom": "Opération à découvert",
+      "set": "origins",
+      "rarete": "rare",
+      "variant": "normale",
+      "couleur": "orange",
+      "type": "sort",
+      "cost": 5,
+      "power": 2,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "action",
+      "image": "OGN-153"
+    },
+    "sabotage": {
+      "type_objet": "carte",
+      "nom": "Sabotage",
+      "set": "origins",
+      "rarete": "rare",
+      "variant": "normale",
+      "couleur": "orange",
+      "type": "sort",
+      "cost": 1,
+      "power": 1,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "action",
+      "image": "OGN-156"
+    },
+    "detonation": {
+      "type_objet": "carte",
+      "nom": "Détonation",
+      "set": "spiritforged",
+      "rarete": "commune",
+      "variant": "normale",
+      "couleur": "rouge",
+      "type": "sort",
+      "cost": 1,
+      "power": 1,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "action",
+      "image": "SFD-005"
+    },
+    "yordle_inutilement_grand": {
+      "type_objet": "carte",
+      "nom": "Yordle inutilement grand",
+      "set": "spiritforged",
+      "rarete": "rare",
+      "variant": "normale",
+      "couleur": "vert",
+      "type": "unite",
+      "cost": 10,
+      "power": 3,
+      "might": 5,
+      "tag": "yordle,bandle city",
+      "mots_cles": "shield,tank",
+      "image": "SFD-055"
+    },
+    "barrage_de_roquettes": {
+      "type_objet": "carte",
+      "nom": "Barrage de roquettes",
+      "set": "spiritforged",
+      "rarete": "peu commune",
+      "variant": "normale",
+      "couleur": "bleu",
+      "type": "sort",
+      "cost": 4,
+      "power": 1,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "repeat,action",
+      "image": "SFD-077"
+    },
+    "porteur_fae": {
+      "type_objet": "carte",
+      "nom": "Porteur fae",
+      "set": "spiritforged",
+      "rarete": "commune",
+      "variant": "normale",
+      "couleur": "pourpre",
+      "type": "unite",
+      "cost": 4,
+      "power": 1,
+      "might": 4,
+      "tag": "fae,ionia",
+      "mots_cles": "action",
+      "image": "SFD-125"
+    },
+    "grenade_dansante": {
+      "type_objet": "carte",
+      "nom": "Grenade dansante",
+      "set": "unleashed",
+      "rarete": "rare",
+      "variant": "normale",
+      "couleur": "rouge",
+      "type": "sort",
+      "cost": 2,
+      "power": 1,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "action",
+      "image": "UNL-020"
+    },
+    "pomme_de_pin_explosive": {
+      "type_objet": "carte",
+      "nom": "Pomme de pin explosive",
+      "set": "unleashed",
+      "rarete": "peu commune",
+      "variant": "normale",
+      "couleur": "pourpre",
+      "type": "equipement",
+      "cost": 4,
+      "power": 1,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "stun",
+      "image": "UNL-133"
+    },
+    "inspecteur_de_securite": {
+      "type_objet": "carte",
+      "nom": "Inspecteur de sécurité",
+      "set": "unleashed",
+      "rarete": "peu commune",
+      "variant": "normale",
+      "couleur": "pourpre",
+      "type": "unite",
+      "cost": 5,
+      "power": 1,
+      "might": 3,
+      "tag": "yordle,zaun",
+      "mots_cles": "action",
+      "image": "UNL-164"
+    },
+    "duel_cataclysmique": {
+      "type_objet": "carte",
+      "nom": "Duel cataclysmique",
+      "set": "vendetta",
+      "rarete": "epique",
+      "variant": "normale",
+      "couleur": "orange",
+      "type": "sort",
+      "cost": 8,
+      "power": 3,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "action",
+      "image": "VEN-090"
+    },
+    "pierre_luisante": {
+      "type_objet": "carte",
+      "nom": "Pierre luisante",
+      "set": "vendetta",
+      "rarete": "rare",
+      "variant": "normale",
+      "couleur": "jaune",
+      "type": "equipement",
+      "cost": 2,
+      "power": 2,
+      "might": 0,
+      "tag": "",
+      "mots_cles": "empower",
+      "image": "VEN-133"
+    },
+    "expert_en_demantelement": {
+      "type_objet": "carte",
+      "nom": "Expert en démantèlement",
+      "set": "radiance",
+      "rarete": "commune",
+      "variant": "normale",
+      "couleur": "pourpre",
+      "type": "unite",
+      "cost": 4,
+      "power": 0,
+      "might": 3,
+      "tag": "zaun",
+      "mots_cles": "disarm",
+      "image": "RAD-093"
+    },
+    "champ_de_mines_hexplosives": {
+      "type_objet": "carte",
+      "nom": "Champ de mines hexplosives",
+      "set": "radiance",
+      "rarete": "epique",
+      "variant": "normale",
+      "couleur": "rouge",
+      "type": "sort",
+      "cost": 2,
+      "power": 1,
+      "might": 0,
+      "tag": "ziggs",
+      "mots_cles": "action",
+      "image": "RAD-142"
+    },
+    "ziggs_courte_meche": {
+      "type_objet": "carte",
+      "nom": "Ziggs, Courte mèche",
+      "set": "radiance",
+      "rarete": "epique",
+      "variant": "normale",
+      "couleur": "rouge",
+      "type": "unite",
+      "cost": 5,
+      "power": 1,
+      "might": 5,
+      "tag": "ziggs,yordle,zaun",
+      "mots_cles": "deploy",
+      "image": "RAD-023"
+    }
+  },
+  "ameliorations": {
+    "garde_d_acier": {
+      "rarete": "commune",
+      "text": "garde d'acier",
+      "effet": {
+        "chance de shield": "15%"
+      },
+      "prix": 15
+    },
+    "strategie_active": {
+      "rarete": "commune",
+      "text": "stratégie active",
+      "effet": {
+        "chance de action": "15%"
+      },
+      "prix": 15
+    },
+    "calme_absolu": {
+      "rarete": "commune",
+      "text": "calme absolu",
+      "effet": {
+        "chance de vert": "12%",
+        "chance de power": "6%"
+      },
+      "prix": 20
+    },
+    "vigie_defensive": {
+      "rarete": "commune",
+      "text": "vigie défensive",
+      "effet": {
+        "chance de vert": "10%",
+        "chance de shield": "8%"
+      },
+      "prix": 22
+    },
+    "assaut_furieux": {
+      "rarete": "commune",
+      "text": "assaut furieux",
+      "effet": {
+        "chance de rouge": "12%",
+        "chance de action": "10%"
+      },
+      "prix": 25
+    },
+    "reflexe_fulgurant": {
+      "rarete": "peu commune",
+      "text": "réflexe fulgurant",
+      "effet": {
+        "chance de reaction": "12%",
+        "chance de bleu": "10%"
+      },
+      "prix": 30
+    },
+    "force_colossale": {
+      "rarete": "peu commune",
+      "text": "force colossale",
+      "effet": {
+        "chance d'unite mighty": "15%",
+        "chance de orange": "10%"
+      },
+      "prix": 35
+    },
+    "pacte_chaotique": {
+      "rarete": "rare",
+      "text": "pacte chaotique",
+      "effet": {
+        "chance de pourpre": "15%",
+        "chance de unite": "12%",
+        "chance de stun": "8%"
+      },
+      "prix": 48
+    },
+    "ingenierie_de_zaun": {
+      "rarete": "rare",
+      "text": "ingénierie de Zaun",
+      "effet": {
+        "chance de zaun": "18%",
+        "chance de equipement": "12%",
+        "chance de power": "8%"
+      },
+      "prix": 50
+    },
+    "maitrise_arcanique": {
+      "rarete": "rare",
+      "text": "maîtrise arcanique",
+      "effet": {
+        "chance de power": "12%",
+        "chance de bleu": "15%",
+        "chance de action": "8%"
+      },
+      "prix": 55
+    },
+    "bastion_inebranlable": {
+      "rarete": "rare",
+      "text": "bastion inébranlable",
+      "effet": {
+        "chance de shield": "14%",
+        "chance d'unite mighty": "12%",
+        "chance de vert": "10%"
+      },
+      "prix": 60
+    },
+    "benediction_des_runes": {
+      "rarete": "epique",
+      "text": "bénédiction des runes",
+      "effet": {
+        "chance de power": "25%"
+      },
+      "prix": 70
+    },
+    "apotheose_guerriere": {
+      "rarete": "epique",
+      "text": "apothéose guerrière",
+      "effet": {
+        "chance d'unite mighty": "18%",
+        "chance de shield": "12%",
+        "chance de rouge": "15%",
+        "chance de epique": "10%"
+      },
+      "prix": 95
+    },
+    "tempete_tactique": {
+      "rarete": "epique",
+      "text": "tempête tactique",
+      "effet": {
+        "chance de action": "20%",
+        "chance de reaction": "15%",
+        "chance de power": "14%",
+        "chance de epique": "10%"
+      },
+      "prix": 110
+    }
+  }
+}
