@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -175,6 +176,33 @@ private fun DurationScreen(onPick: (Int) -> Unit) {
                 row.forEach { minutes ->
                     DurationCard(minutes, Modifier.weight(1f)) { onPick(minutes) }
                 }
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        val context = LocalContext.current
+        Surface(
+            onClick = { context.startActivity(Intent(context, CollectionActivity::class.java)) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White.copy(alpha = 0.08f),
+            border = BorderStroke(1.dp, Sky.copy(alpha = 0.4f))
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "🃏  MA COLLECTION",
+                    color = Smiley,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
             }
         }
     }
