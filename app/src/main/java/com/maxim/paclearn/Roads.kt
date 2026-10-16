@@ -1,4 +1,4 @@
-package com.maxim.paclearn
+ package com.maxim.paclearn
 
 import org.json.JSONObject
 import org.osmdroid.util.GeoPoint
@@ -16,8 +16,10 @@ import kotlin.math.min
 // Les donnees du jeu : rues et batiments telecharges depuis OpenStreetMap,
 // puis les orbes poses le long des rues.
 
-// L'instance principale rend regulierement des 504 : on bascule sur un miroir.
+// L'instance principale rend regulierement des 504 ou met plus de 30 s a
+// repondre : on commence par le miroir de mail.ru, le plus rapide aux essais.
 private val OVERPASS_ENDPOINTS = listOf(
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://overpass.private.coffee/api/interpreter"
@@ -78,7 +80,7 @@ private fun post(endpoint: String, query: String, userAgent: String): String {
     val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
         requestMethod = "POST"
         connectTimeout = 15_000
-        readTimeout = 30_000
+        readTimeout = 60_000 // une instance chargee met jusqu'a ~40 s avant de repondre
         doOutput = true
         setRequestProperty("User-Agent", userAgent)
     }
