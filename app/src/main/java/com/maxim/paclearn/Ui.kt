@@ -234,7 +234,7 @@ private fun DurationCard(minutes: Int, modifier: Modifier, onClick: () -> Unit) 
 
 /** Ce qui s'affiche par-dessus la carte : chrono, cagnotte et messages d'etat. */
 @Composable
-fun Hud(secondsLeft: Int, money: Int, @StringRes status: Int?, onShop: () -> Unit) {
+fun Hud(secondsLeft: Int, money: Int, @StringRes status: Int?, onShop: () -> Unit, onQuit: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
@@ -247,7 +247,14 @@ fun Hud(secondsLeft: Int, money: Int, @StringRes status: Int?, onShop: () -> Uni
                 .align(Alignment.TopCenter),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            TimerPill(secondsLeft)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                TimerPill(secondsLeft)
+                Box(Modifier.clip(PillShape).clickable(onClick = onQuit)) {
+                    Pill {
+                        Text(text = "Quitter", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 MoneyPill(money)
                 Box(Modifier.clip(PillShape).clickable(onClick = onShop)) {

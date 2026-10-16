@@ -16,6 +16,7 @@ import android.location.LocationManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,7 +30,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.maxim.paclearn.storage.CarteStorage
+import com.maxim.paclearn.model.Carte
 import com.maxim.paclearn.storage.Catalogue
+import com.maxim.paclearn.storage.Reserve
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -71,9 +74,19 @@ class MainActivity : ComponentActivity() {
     private var time by mutableStateOf(0) // temps restant en sec
     private var status by mutableStateOf<Int?>(R.string.searching_position)
     private var shopOpen by mutableStateOf(false)
+    private var confirmQuit by mutableStateOf(false)
+    private var stats by mutableStateOf<RunStats?>(null) // non nul : partie finie, recap affiche
 
     private val collection by lazy { CarteStorage(this) }
-    private val shop by lazy { RunShop(Catalogue.load(this)) }
+    private val shop by lazy { RunShop(Catalogue.load(this), Reserve(this)) }
+
+    // Pour le recap de fin de partie.
+    private var totalSeconds = 0
+    private var orbsCollected = 0
+    private var earned = 0
+    private var spent = 0
+    private val bought = ArrayList<Carte>()
+    private var timerJob: Job? = null
 
     private val askLocation = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -115,7 +128,8 @@ class MainActivity : ComponentActivity() {
         }
 
         // Duree choisie sur l'ecran d'accueil, convertie en secondes.
-        time = intent.getIntExtra(TimeSelectActivity.EXTRA_MINUTES, DEFAULT_MINUTES) * 60
+        totalSeconds = intent.getIntExtra(TimeSelectActivity.EXTRA_MINUTES, DEFAULT_MINUTES) * 60
+        time = totalSeconds
 
         playerOverlay = PlayerOverlay(resources.displayMetrics.density, COLLECT_RADIUS_M)
         mapView.overlays.add(playerOverlay)
@@ -129,18 +143,36 @@ class MainActivity : ComponentActivity() {
             PacTheme {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-                    Hud(secondsLeft = time, money = money, status = status, onShop = { shopOpen = true })
+                    Hud(
+                        secondsLeft = time,
+                        money = money,
+                        status = status,
+                        onShop = { shopOpen = true },
+                        onQuit = { confirmQuit = true }
+                    )
+                    // Le retour ne quitte pas d'un coup : on rappelle ce qui sera perdu.
+                    BackHandler(enabled = stats == null) { confirmQuit = true }
                     if (shopOpen) {
                         ShopScreen(
                             shop = shop,
                             money = money,
                             possedees = { collection.find(it.uniqueId())?.quantity ?: 0 },
                             onAcheterCarte = ::buyCard,
+                            onAcheterReservee = ::buyReserved,
                             onAcheterAmelioration = ::buyUpgrade,
                             onRelancer = ::rerollShop,
                             onFermer = { shopOpen = false }
                         )
                     }
+                    if (confirmQuit) {
+                        QuitDialog(
+                            money = money,
+                            ameliorations = shop.actives.size,
+                            onRester = { confirmQuit = false },
+                            onQuitter = { endRun(timeUp = false) }
+                        )
+                    }
+                    stats?.let { RecapScreen(it, onTerminer = ::finish) }
                 }
             }
         }
@@ -150,36 +182,66 @@ class MainActivity : ComponentActivity() {
             arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
         )
 
-        lifecycleScope.launch {
+        timerJob = lifecycleScope.launch {
             while (time > 0) {
                 delay(1000)
                 time--
             }
-            // Fin de partie : pour l'instant on revient a l'ecran de choix.
-            finish()
+            endRun(timeUp = true)
         }
     }
 
+    /** Arrete la partie (chrono, GPS, chargements) et affiche le recap. */
+    private fun endRun(timeUp: Boolean) {
+        if (stats != null) return
+        timerJob?.cancel()
+        spawnJob?.cancel()
+        locationManager.removeUpdates(locationListener)
+        shopOpen = false
+        confirmQuit = false
+        stats = RunStats(
+            secondesJouees = totalSeconds - time,
+            orbes = orbsCollected,
+            gagne = earned,
+            depense = spent,
+            restant = money,
+            cartes = bought.toList(),
+            ameliorations = shop.actives.toList(),
+            tempsEcoule = timeUp
+        )
+    }
+
     // La boutique peut etre ouverte pendant qu'on marche : on reverifie l'argent a chaque achat.
+    private fun pay(amount: Int): Boolean {
+        if (stats != null || money < amount) return false
+        money -= amount
+        spent += amount
+        return true
+    }
+
     private fun buyCard(index: Int) {
-        val carte = shop.cartes[index] ?: return
-        val prix = prixCarte(carte)
-        if (money < prix) return
-        money -= prix
-        collection.addOrIncrement(carte)
+        val offre = shop.cartes[index]
+        if (offre.etat != EtatOffre.EN_VENTE || !pay(prixCarte(offre.carte))) return
+        collection.addOrIncrement(offre.carte)
+        bought.add(offre.carte)
         shop.vendreCarte(index)
+    }
+
+    private fun buyReserved(carte: Carte) {
+        if (!pay(prixCarte(carte))) return
+        collection.addOrIncrement(carte)
+        bought.add(carte)
+        shop.retirerDeLaReserve(carte)
     }
 
     private fun buyUpgrade(index: Int) {
         val amelioration = shop.ameliorations[index] ?: return
-        if (money < amelioration.prix) return
-        money -= amelioration.prix
+        if (!pay(amelioration.prix)) return
         shop.vendreAmelioration(index)
     }
 
     private fun rerollShop() {
-        if (money < PRIX_RELANCE) return
-        money -= PRIX_RELANCE
+        if (!pay(PRIX_RELANCE)) return
         shop.relancer()
     }
 
@@ -267,6 +329,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun onPlayerMoved(position: GeoPoint) {
+        if (stats != null) return // partie finie : plus rien a ramasser
         // Seuls les messages de recherche tombent : celui du chargement de la
         // carte reste tant qu'elle n'est pas arrivee.
         if (status == R.string.searching_position || status == R.string.location_off) status = null
@@ -287,6 +350,8 @@ class MainActivity : ComponentActivity() {
         if (picked.isEmpty()) return
 
         money += picked.size * ORB_VALUE
+        earned += picked.size * ORB_VALUE
+        orbsCollected += picked.size
         // Retenus pour qu'ils ne reapparaissent pas au prochain rechargement des rues.
         picked.forEach { collected.add(cellOf(it)) }
         mapView.invalidate()
@@ -359,7 +424,7 @@ class MainActivity : ComponentActivity() {
         const val RESPAWN_M = 200.0
         const val ORB_SPACING_M = 90.0
         const val COLLECT_RADIUS_M = 15.0 // le GPS d'un telephone se trompe de 5 a 15 m
-        const val ORB_VALUE = 1           // euros gagnes par orbe
+        const val ORB_VALUE = 2           // euros par orbe : voir les prix en haut de Shop.kt
         const val RETRY_MS = 10_000L
         const val DEFAULT_MINUTES = 5
 

@@ -33,33 +33,56 @@ import androidx.compose.ui.unit.sp
 import com.maxim.paclearn.model.Amelioration
 import com.maxim.paclearn.model.Carte
 import com.maxim.paclearn.storage.Catalogue
+import com.maxim.paclearn.storage.Reserve
 import kotlin.random.Random
 
 // Prix et frequence des cartes selon leur rarete. Les communes sortent dix fois plus que les epiques.
-private val PRIX_CARTE = mapOf("commune" to 5, "peu commune" to 10, "rare" to 20, "epique" to 35)
+// Une piece vaut ORB_VALUE (2 €) : une partie de 5 min paie une ou deux communes, une de 30 min une epique.
+private val PRIX_CARTE = mapOf("commune" to 4, "peu commune" to 6, "rare" to 10, "epique" to 15)
 private val POIDS_RARETE = mapOf("commune" to 50, "peu commune" to 30, "rare" to 15, "epique" to 5)
 
-fun prixCarte(carte: Carte) = PRIX_CARTE[carte.rarete.lowercase()] ?: 10
+fun prixCarte(carte: Carte) = PRIX_CARTE[carte.rarete.lowercase()] ?: 6
+
+enum class EtatOffre { EN_VENTE, VENDUE, RESERVEE }
+
+data class Offre(val carte: Carte, val etat: EtatOffre = EtatOffre.EN_VENTE)
 
 /**
- * La boutique d'une partie : les offres en vitrine et les ameliorations achetees.
- * Les ameliorations ne durent que la partie ; les cartes achetees vont dans la collection.
+ * La boutique d'une partie : les offres en vitrine, les ameliorations achetees et la reserve.
+ * Les ameliorations ne durent que la partie ; les cartes achetees vont dans la collection
+ * et les cartes reservees attendent la prochaine partie.
  */
-class RunShop(private val catalogue: Catalogue) {
+class RunShop(private val catalogue: Catalogue, private val reserve: Reserve) {
 
-    /** Cartes en vitrine ; null quand l'emplacement a ete achete. */
-    val cartes = mutableStateListOf<Carte?>()
+    val cartes = mutableStateListOf<Offre>()
     val ameliorations = mutableStateListOf<Amelioration?>()
     val actives = mutableStateListOf<Amelioration>()
+    val reservees = mutableStateListOf<Carte>()
 
     init {
+        val ids = reserve.ids()
+        reservees.addAll(catalogue.cartes.filter { it.uniqueId() in ids })
         remplir()
     }
+
+    val reservePleine get() = reservees.size >= Reserve.MAX
 
     fun relancer() = remplir()
 
     fun vendreCarte(index: Int) {
-        cartes[index] = null
+        cartes[index] = cartes[index].copy(etat = EtatOffre.VENDUE)
+    }
+
+    fun reserverCarte(index: Int) {
+        if (reservePleine) return
+        reservees.add(cartes[index].carte)
+        cartes[index] = cartes[index].copy(etat = EtatOffre.RESERVEE)
+        sauverReserve()
+    }
+
+    fun retirerDeLaReserve(carte: Carte) {
+        reservees.removeAll { it.uniqueId() == carte.uniqueId() }
+        sauverReserve()
     }
 
     fun vendreAmelioration(index: Int) {
@@ -67,10 +90,13 @@ class RunShop(private val catalogue: Catalogue) {
         ameliorations[index] = null
     }
 
+    private fun sauverReserve() = reserve.save(reservees.map { it.uniqueId() })
+
     private fun remplir() {
         cartes.clear()
         repeat(NB_CARTES) {
-            tirerCarte(exclues = cartes.filterNotNull())?.let { cartes.add(it) }
+            // Ni doublon en vitrine, ni carte deja mise en reserve.
+            tirerCarte(exclues = cartes.map { it.carte } + reservees)?.let { cartes.add(Offre(it)) }
         }
         ameliorations.clear()
         val disponibles = catalogue.ameliorations.filter { a -> actives.none { it.id == a.id } }.toMutableList()
@@ -125,7 +151,7 @@ private fun aLeTrait(carte: Carte, trait: String): Boolean = when (trait) {
 }
 
 private const val MIGHTY = 5 // dans Riftbound, une unite est "mighty" a partir de 5 de might
-const val PRIX_RELANCE = 2
+const val PRIX_RELANCE = 1
 
 @Composable
 fun ShopScreen(
@@ -133,6 +159,7 @@ fun ShopScreen(
     money: Int,
     possedees: (Carte) -> Int,
     onAcheterCarte: (Int) -> Unit,
+    onAcheterReservee: (Carte) -> Unit,
     onAcheterAmelioration: (Int) -> Unit,
     onRelancer: () -> Unit,
     onFermer: () -> Unit
@@ -171,23 +198,43 @@ fun ShopScreen(
 
         TitreSection("CARTES")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            shop.cartes.forEachIndexed { i, carte ->
+            shop.cartes.forEachIndexed { i, offre ->
                 Column(Modifier.weight(1f)) {
-                    if (carte == null) {
-                        EmplacementVendu(Modifier.fillMaxWidth())
-                    } else {
-                        CarteVierge(carte)
-                        val deja = possedees(carte)
-                        Text(
-                            if (deja > 0) "Possédée ×$deja" else "Nouvelle",
-                            color = if (deja > 0) Muted else RiftOrange,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 6.dp)
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        BoutonPrix(prixCarte(carte), money) { onAcheterCarte(i) }
+                    when (offre.etat) {
+                        EtatOffre.VENDUE -> EmplacementVide("Vendue", Modifier.fillMaxWidth())
+                        EtatOffre.RESERVEE -> EmplacementVide("Réservée", Modifier.fillMaxWidth())
+                        EtatOffre.EN_VENTE -> {
+                            CarteVierge(offre.carte)
+                            MentionPossedee(possedees(offre.carte))
+                            BoutonPrix(prixCarte(offre.carte), money) { onAcheterCarte(i) }
+                            Spacer(Modifier.height(6.dp))
+                            BoutonSecondaire("Réserver", actif = !shop.reservePleine) { shop.reserverCarte(i) }
+                        }
                     }
                 }
+            }
+        }
+
+        TitreSection("RÉSERVE  ${shop.reservees.size} / ${Reserve.MAX}")
+        if (shop.reservees.isEmpty()) {
+            Text(
+                "Réserve jusqu'à ${Reserve.MAX} cartes pour les acheter lors d'une prochaine partie.",
+                color = Muted,
+                fontSize = 13.sp
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                shop.reservees.forEach { carte ->
+                    Column(Modifier.weight(1f)) {
+                        CarteVierge(carte)
+                        MentionPossedee(possedees(carte))
+                        BoutonPrix(prixCarte(carte), money) { onAcheterReservee(carte) }
+                        Spacer(Modifier.height(6.dp))
+                        BoutonSecondaire("Retirer", actif = true) { shop.retirerDeLaReserve(carte) }
+                    }
+                }
+                // Garde la meme largeur de carte qu'avec une reserve pleine.
+                repeat(Reserve.MAX - shop.reservees.size) { Spacer(Modifier.weight(1f)) }
             }
         }
 
@@ -301,13 +348,38 @@ private fun BoutonPrix(prix: Int, money: Int, modifier: Modifier = Modifier.fill
 }
 
 @Composable
-private fun EmplacementVendu(modifier: Modifier) {
+private fun BoutonSecondaire(texte: String, actif: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .border(1.dp, RiftLine)
+            .clickable(enabled = actif, onClick = onClick)
+            .alpha(if (actif) 1f else 0.4f),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(texte, color = Color.White, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun MentionPossedee(deja: Int) {
+    Text(
+        if (deja > 0) "Possédée ×$deja" else "Nouvelle",
+        color = if (deja > 0) Muted else RiftOrange,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(vertical = 6.dp)
+    )
+}
+
+@Composable
+private fun EmplacementVide(texte: String, modifier: Modifier) {
     Box(
         modifier
             .aspectRatio(63f / 88f)
             .border(1.dp, RiftLine.copy(alpha = 0.5f)),
         contentAlignment = Alignment.Center
     ) {
-        Text("Vendu", color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
+        Text(texte, color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center)
     }
 }

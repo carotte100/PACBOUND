@@ -278,7 +278,7 @@
       "effet": {
         "chance de shield": "15%"
       },
-      "prix": 15
+      "prix": 4
     },
     "strategie_active": {
       "rarete": "commune",
@@ -286,7 +286,7 @@
       "effet": {
         "chance de action": "15%"
       },
-      "prix": 15
+      "prix": 4
     },
     "calme_absolu": {
       "rarete": "commune",
@@ -295,7 +295,7 @@
         "chance de vert": "12%",
         "chance de power": "6%"
       },
-      "prix": 20
+      "prix": 5
     },
     "vigie_defensive": {
       "rarete": "commune",
@@ -304,7 +304,7 @@
         "chance de vert": "10%",
         "chance de shield": "8%"
       },
-      "prix": 22
+      "prix": 6
     },
     "assaut_furieux": {
       "rarete": "commune",
@@ -313,7 +313,7 @@
         "chance de rouge": "12%",
         "chance de action": "10%"
       },
-      "prix": 25
+      "prix": 6
     },
     "reflexe_fulgurant": {
       "rarete": "peu commune",
@@ -322,7 +322,7 @@
         "chance de reaction": "12%",
         "chance de bleu": "10%"
       },
-      "prix": 30
+      "prix": 8
     },
     "force_colossale": {
       "rarete": "peu commune",
@@ -331,7 +331,7 @@
         "chance d'unite mighty": "15%",
         "chance de orange": "10%"
       },
-      "prix": 35
+      "prix": 9
     },
     "pacte_chaotique": {
       "rarete": "rare",
@@ -341,7 +341,7 @@
         "chance de unite": "12%",
         "chance de stun": "8%"
       },
-      "prix": 48
+      "prix": 12
     },
     "ingenierie_de_zaun": {
       "rarete": "rare",
@@ -351,7 +351,7 @@
         "chance de equipement": "12%",
         "chance de power": "8%"
       },
-      "prix": 50
+      "prix": 13
     },
     "maitrise_arcanique": {
       "rarete": "rare",
@@ -361,7 +361,7 @@
         "chance de bleu": "15%",
         "chance de action": "8%"
       },
-      "prix": 55
+      "prix": 14
     },
     "bastion_inebranlable": {
       "rarete": "rare",
@@ -371,7 +371,7 @@
         "chance d'unite mighty": "12%",
         "chance de vert": "10%"
       },
-      "prix": 60
+      "prix": 15
     },
     "benediction_des_runes": {
       "rarete": "epique",
@@ -379,7 +379,7 @@
       "effet": {
         "chance de power": "25%"
       },
-      "prix": 70
+      "prix": 18
     },
     "apotheose_guerriere": {
       "rarete": "epique",
@@ -390,7 +390,7 @@
         "chance de rouge": "15%",
         "chance de epique": "10%"
       },
-      "prix": 95
+      "prix": 24
     },
     "tempete_tactique": {
       "rarete": "epique",
@@ -401,7 +401,7 @@
         "chance de power": "14%",
         "chance de epique": "10%"
       },
-      "prix": 110
+      "prix": 28
     }
   }
 }
