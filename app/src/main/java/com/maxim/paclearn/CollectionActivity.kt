@@ -1,19 +1,22 @@
 package com.maxim.paclearn
 
-import android.content.Context
 import android.graphics.Color.TRANSPARENT
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,17 +33,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,12 +50,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -65,8 +64,35 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.maxim.paclearn.model.Carte
 import com.maxim.paclearn.storage.CarteStorage
-import com.maxim.paclearn.storage.readJsonFromAssets
-import org.json.JSONObject
+import com.maxim.paclearn.storage.Catalogue
+
+// Palette reprise de la galerie de cartes du site Riftbound.
+internal val RiftBlue = Color(0xFF013951)
+internal val RiftDeep = Color(0xFF012A3D)
+internal val RiftLine = Color(0xFF336073)
+internal val RiftOrange = Color(0xFFF28C1B)
+internal val Muted = Color.White.copy(alpha = 0.6f)
+
+// Pas de police Beaufort embarquee : un serif epais en majuscules s'en approche.
+internal val Title = FontFamily.Serif
+
+private enum class Tri(val label: String) { COUT("Coût"), NOM("Nom"), RARETE("Rareté") }
+
+internal val COULEURS = listOf(
+    "rouge" to Color(0xFFE0443A),
+    "vert" to Color(0xFF3FA34D),
+    "bleu" to Color(0xFF2F7FD8),
+    "orange" to Color(0xFFF28C1B),
+    "pourpre" to Color(0xFF9146C8),
+    "jaune" to Color(0xFFF2C94C)
+)
+
+internal val TYPES = listOf("unite" to "Unité", "sort" to "Sort", "equipement" to "Équipement")
+
+internal val RARETES = listOf("commune", "peu commune", "rare", "epique")
+
+private fun couleurDe(carte: Carte) =
+    COULEURS.firstOrNull { it.first == carte.couleur.lowercase() }?.second ?: RiftLine
 
 class CollectionActivity : ComponentActivity() {
 
@@ -88,512 +114,445 @@ class CollectionActivity : ComponentActivity() {
 fun CollectionScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val storage = remember { CarteStorage(context) }
+    // Tout le catalogue, comme un album : quantity = 0 pour les cartes pas encore achetees.
     val cartes = remember { mutableStateListOf<Carte>() }
-    var isLoading by remember { mutableStateOf(true) }
 
-    var selectedColor by remember { mutableStateOf<String?>(null) }
-    var selectedType by remember { mutableStateOf<String?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var cardDetail by remember { mutableStateOf<Carte?>(null) }
-
-    fun reloadCollection() {
-        cartes.clear()
-        cartes.addAll(storage.getCollection())
-    }
+    var filtresOuverts by remember { mutableStateOf(false) }
+    var tri by remember { mutableStateOf(Tri.COUT) }
+    var couleur by remember { mutableStateOf<String?>(null) }
+    var type by remember { mutableStateOf<String?>(null) }
+    var recherche by remember { mutableStateOf("") }
+    var detail by remember { mutableStateOf<Carte?>(null) }
 
     LaunchedEffect(Unit) {
-        if (storage.size() == 0) {
-            // Initialisation avec le catalogue local pour le premier lancement
-            try {
-                val jsonString = readJsonFromAssets(context, "data.json")
-                val root = JSONObject(jsonString)
-                val cartesObj = root.optJSONObject("cartes")
-                if (cartesObj != null) {
-                    val keys = cartesObj.keys()
-                    while (keys.hasNext()) {
-                        val key = keys.next()
-                        val cardJson = cartesObj.getJSONObject(key)
-                        val c = Carte.fromJson(cardJson)
-                        storage.insert(c.uniqueId(), c)
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
+        val possedees = storage.getCollection().associateBy { it.uniqueId() }
+        val catalogue = Catalogue.load(context).cartes
+            .map { it.copy(quantity = possedees[it.uniqueId()]?.quantity ?: 0) }
+        // Une carte possedee peut ne plus etre au catalogue : on la garde quand meme.
+        val horsCatalogue = possedees.values.filter { c -> catalogue.none { it.uniqueId() == c.uniqueId() } }
+        cartes.addAll(catalogue + horsCatalogue)
+    }
+    val obtenues = cartes.filter { it.quantity > 0 }
+
+    val visibles = cartes.filter { carte ->
+        (couleur == null || carte.couleur.equals(couleur, ignoreCase = true)) &&
+            (type == null || carte.type.equals(type, ignoreCase = true)) &&
+            (recherche.isBlank() || carte.nom.contains(recherche, ignoreCase = true) ||
+                carte.tag.contains(recherche, ignoreCase = true))
+    }
+    val parSet = visibles
+        .sortedWith(
+            when (tri) {
+                Tri.COUT -> compareBy<Carte>({ it.cost }, { it.nom })
+                Tri.NOM -> compareBy { it.nom }
+                Tri.RARETE -> compareByDescending<Carte> { RARETES.indexOf(it.rarete.lowercase()) }.thenBy { it.nom }
             }
-        }
-        reloadCollection()
-        isLoading = false
-    }
-
-    val filteredCartes = cartes.filter { carte ->
-        val matchColor = selectedColor == null || carte.couleur.equals(selectedColor, ignoreCase = true)
-        val matchType = selectedType == null || carte.type.equals(selectedType, ignoreCase = true)
-        val matchQuery = searchQuery.isBlank() || carte.nom.contains(searchQuery, ignoreCase = true) || carte.tag.contains(searchQuery, ignoreCase = true)
-        matchColor && matchType && matchQuery
-    }
-
-    val totalCopies = cartes.sumOf { it.quantity }
+        )
+        .groupBy { it.set.lowercase() }
+        .toSortedMap()
 
     Box(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(NightHigh, Night)))
+            .background(RiftBlue)
             .systemBarsPadding()
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // En-tête
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    onClick = onBack,
-                    shape = CircleShape,
-                    color = Color.White.copy(alpha = 0.1f),
-                    modifier = Modifier.size(42.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(text = "←", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column {
+                    Row(
+                        Modifier.padding(top = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .size(40.dp)
+                                .border(1.dp, RiftLine)
+                                .clickable(onClick = onBack),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("←", color = Color.White, fontSize = 20.sp)
+                        }
                     }
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "MA COLLECTION",
-                        color = Smiley,
-                        fontSize = 22.sp,
+                        "COLLECTION",
+                        color = Color.White,
+                        fontFamily = Title,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp
+                        fontSize = 36.sp,
+                        modifier = Modifier.padding(top = 20.dp)
                     )
                     Text(
-                        text = "${cartes.size} cartes uniques • $totalCopies exemplaires",
-                        color = Color.White.copy(alpha = 0.65f),
-                        fontSize = 12.sp
+                        "${obtenues.size} / ${cartes.size} cartes · ${obtenues.sumOf { it.quantity }} exemplaires",
+                        color = Muted,
+                        fontSize = 13.sp
                     )
-                }
-            }
+                    Spacer(Modifier.height(20.dp))
 
-            // Barre de recherche
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Rechercher une carte ou un tag...", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(14.dp),
-                singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color.White.copy(alpha = 0.06f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
-                    focusedBorderColor = Sky,
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f)
-                )
-            )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(
+                            Modifier
+                                .height(48.dp)
+                                .background(if (filtresOuverts) RiftLine.copy(alpha = 0.45f) else Color.Transparent)
+                                .border(1.dp, RiftLine)
+                                .clickable { filtresOuverts = !filtresOuverts }
+                                .padding(horizontal = 14.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                if (filtresOuverts) "Masquer les filtres" else "Filtres",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                        ChampRecherche(recherche, { recherche = it }, Modifier.weight(1f))
+                    }
 
-            // Filtres par couleur / domaine
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChipItem(
-                    label = "Toutes",
-                    isSelected = selectedColor == null,
-                    badgeColor = Sky,
-                    onClick = { selectedColor = null }
-                )
-                FilterChipItem("Vert (Calm)", selectedColor == "vert", Color(0xFF43A047)) { selectedColor = if (selectedColor == "vert") null else "vert" }
-                FilterChipItem("Rouge (Fury)", selectedColor == "rouge", Color(0xFFE53935)) { selectedColor = if (selectedColor == "rouge") null else "rouge" }
-                FilterChipItem("Bleu (Mind)", selectedColor == "bleu", Color(0xFF1E88E5)) { selectedColor = if (selectedColor == "bleu") null else "bleu" }
-                FilterChipItem("Orange (Body)", selectedColor == "orange", Color(0xFFFB8C00)) { selectedColor = if (selectedColor == "orange") null else "orange" }
-                FilterChipItem("Pourpre (Chaos)", selectedColor == "pourpre", Color(0xFF8E24AA)) { selectedColor = if (selectedColor == "pourpre") null else "pourpre" }
-                FilterChipItem("Jaune (Order)", selectedColor == "jaune", Color(0xFFFDD835)) { selectedColor = if (selectedColor == "jaune") null else "jaune" }
-            }
-
-            // Filtres par type de carte
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                TypeChipItem("Tous les types", selectedType == null) { selectedType = null }
-                TypeChipItem("Unités", selectedType == "unite") { selectedType = if (selectedType == "unite") null else "unite" }
-                TypeChipItem("Sorts", selectedType == "sort") { selectedType = if (selectedType == "sort") null else "sort" }
-                TypeChipItem("Équipements", selectedType == "equipement") { selectedType = if (selectedType == "equipement") null else "equipement" }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Grille de cartes
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Smiley)
-                }
-            } else if (filteredCartes.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "Aucune carte trouvée", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "Modifiez vos filtres ou effectuez une recherche différente.",
-                            color = Color.White.copy(alpha = 0.6f),
-                            textAlign = TextAlign.Center,
-                            fontSize = 13.sp
+                    AnimatedVisibility(filtresOuverts) {
+                        PanneauFiltres(
+                            tri = tri, onTri = { tri = it },
+                            couleur = couleur, onCouleur = { couleur = if (couleur == it) null else it },
+                            type = type, onType = { type = if (type == it) null else it }
                         )
                     }
                 }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(filteredCartes, key = { it.uniqueId() }) { carte ->
-                        CardGridItem(carte = carte, onClick = { cardDetail = carte })
-                    }
+            }
+
+            if (parSet.isEmpty() && cartes.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        "Aucune carte ne correspond à ces filtres.",
+                        color = Muted,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(vertical = 40.dp),
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
-        }
 
-        // Modal détaillé au clic sur une carte
-        cardDetail?.let { selected ->
-            CardDetailDialog(
-                carte = selected,
-                onDismiss = { cardDetail = null },
-                onAddCopy = {
-                    storage.addOrIncrement(selected, 1)
-                    reloadCollection()
-                    cardDetail = storage.find(selected.uniqueId())
-                },
-                onRemoveCopy = {
-                    storage.removeOrDecrement(selected, 1)
-                    reloadCollection()
-                    cardDetail = storage.find(selected.uniqueId())
-                    if (cardDetail == null) cardDetail = null
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun CardGridItem(carte: Carte, onClick: () -> Unit) {
-    val context = LocalContext.current
-    val imageResId = remember(carte.image) { carte.getDrawableResId(context) }
-
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(
-            1.dp,
-            if (carte.foil) Smiley.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.12f)
-        ),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(0.72f)
-                    .background(Color.Black.copy(alpha = 0.3f))
-            ) {
-                if (imageResId != 0) {
-                    Image(
-                        painter = painterResource(id = imageResId),
-                        contentDescription = carte.nom,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = carte.nom, color = Color.White, fontSize = 12.sp, textAlign = TextAlign.Center)
-                    }
-                }
-
-                // Badge Quantité
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.8f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                ) {
-                    Text(
-                        text = "x${carte.quantity}",
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-
-                // Badge Foil si applicable
-                if (carte.foil) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Smiley,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp)
+            parSet.forEach { (set, cartesDuSet) ->
+                item(span = { GridItemSpan(maxLineSpan) }, key = "set_$set") {
+                    Row(
+                        Modifier.padding(top = 16.dp),
+                        verticalAlignment = Alignment.Bottom
                     ) {
                         Text(
-                            text = "✨ FOIL",
-                            color = Color.Black,
-                            fontSize = 9.sp,
+                            set.uppercase(),
+                            color = Color.White,
+                            fontFamily = Title,
                             fontWeight = FontWeight.Black,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            fontSize = 22.sp
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "${cartesDuSet.count { it.quantity > 0 }} / ${cartesDuSet.size}",
+                            color = Muted,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(bottom = 3.dp)
                         )
                     }
                 }
-            }
-
-            // Informations sous l'image
-            Column(modifier = Modifier.padding(10.dp)) {
-                Text(
-                    text = carte.nom,
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(3.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = carte.type.replaceFirstChar { it.uppercase() },
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 11.sp
-                    )
-                    Text(
-                        text = carte.rarete.uppercase(),
-                        color = when (carte.rarete.lowercase()) {
-                            "epique" -> Color(0xFFFFB300)
-                            "rare" -> Sky
-                            else -> Color.White.copy(alpha = 0.5f)
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                items(cartesDuSet, key = { it.uniqueId() }) { carte ->
+                    // Pas encore achetee : grisee, on voit seulement ce qu'il reste a trouver.
+                    CarteVierge(
+                        carte,
+                        Modifier
+                            .alpha(if (carte.quantity > 0) 1f else 0.3f)
+                            .clickable { detail = carte }
                     )
                 }
             }
         }
-    }
-}
 
-@Composable
-fun FilterChipItem(label: String, isSelected: Boolean, badgeColor: Color, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) badgeColor.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.05f),
-        border = BorderStroke(1.dp, if (isSelected) badgeColor else Color.White.copy(alpha = 0.15f))
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(badgeColor)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = label,
-                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            )
+        detail?.let { carte ->
+            FicheCarte(carte = carte, onDismiss = { detail = null })
         }
     }
 }
 
 @Composable
-fun TypeChipItem(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (isSelected) Sky.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.04f),
-        border = BorderStroke(1.dp, if (isSelected) Sky else Color.White.copy(alpha = 0.1f))
+private fun ChampRecherche(valeur: String, onChange: (String) -> Unit, modifier: Modifier) {
+    BasicTextField(
+        value = valeur,
+        onValueChange = onChange,
+        singleLine = true,
+        textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+        cursorBrush = SolidColor(RiftOrange),
+        modifier = modifier
+            .height(48.dp)
+            .border(1.dp, RiftLine),
+        decorationBox = { champ ->
+            Row(
+                Modifier.padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("⌕", color = Muted, fontSize = 18.sp)
+                Spacer(Modifier.width(10.dp))
+                Box {
+                    if (valeur.isEmpty()) Text("Rechercher", color = Muted, fontSize = 14.sp)
+                    champ()
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun PanneauFiltres(
+    tri: Tri, onTri: (Tri) -> Unit,
+    couleur: String?, onCouleur: (String) -> Unit,
+    type: String?, onType: (String) -> Unit
+) {
+    Column(
+        Modifier
+            .padding(top = 10.dp)
+            .fillMaxWidth()
+            .border(1.dp, RiftLine)
+            .background(RiftDeep)
+    ) {
+        SectionFiltre("Trier par") {
+            Tri.values().forEach { Option(it.label, tri == it) { onTri(it) } }
+        }
+        Ligne()
+        SectionFiltre("Domaine") {
+            COULEURS.forEach { (nom, teinte) ->
+                Option(nom.replaceFirstChar { it.uppercase() }, couleur == nom, teinte) { onCouleur(nom) }
+            }
+        }
+        Ligne()
+        SectionFiltre("Type") {
+            TYPES.forEach { (cle, label) -> Option(label, type == cle) { onType(cle) } }
+        }
+    }
+}
+
+@Composable
+private fun SectionFiltre(titre: String, options: @Composable () -> Unit) {
+    Column(Modifier.padding(vertical = 12.dp)) {
+        Text(
+            titre,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = 14.dp)
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) { options() }
+    }
+}
+
+@Composable
+private fun Ligne() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .height(1.dp)
+            .background(RiftLine)
+    )
+}
+
+@Composable
+private fun Option(label: String, actif: Boolean, pastille: Color? = null, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .background(if (actif) Color.White else Color.Transparent)
+            .border(1.dp, if (actif) Color.White else RiftLine)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (pastille != null) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .background(pastille, CircleShape)
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            label,
+            color = if (actif) RiftBlue else Color.White,
+            fontWeight = if (actif) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 13.sp
+        )
+    }
+}
+
+/** Le visuel de la carte (res/drawable), ou un rectangle noir au format carte s'il manque. */
+@Composable
+internal fun CarteVierge(carte: Carte, modifier: Modifier = Modifier, grand: Boolean = false) {
+    val context = LocalContext.current
+    val imageId = remember(carte.image) { carte.getDrawableResId(context) }
+    val forme = RoundedCornerShape(if (grand) 12.dp else 8.dp)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .aspectRatio(63f / 88f)
+            .clip(forme)
+            .background(Color.Black)
+            .border(1.dp, Color.White.copy(alpha = 0.08f), forme)
+    ) {
+        if (imageId != 0) {
+            Image(
+                painter = painterResource(imageId),
+                contentDescription = carte.nom,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            InfosSansVisuel(carte, grand)
+        }
+
+        if (carte.quantity > 1) {
+            Text(
+                "×${carte.quantity}",
+                color = RiftBlue,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .background(Color.White)
+                    .padding(horizontal = 6.dp, vertical = 1.dp)
+            )
+        }
+    }
+}
+
+/** Sans visuel, on ecrit sur le fond noir ce que la carte imprimee montrerait. */
+@Composable
+private fun BoxScope.InfosSansVisuel(carte: Carte, grand: Boolean) {
+    // Cout dans le coin, comme sur les vraies cartes.
+    Box(
+        Modifier
+            .padding(8.dp)
+            .size(if (grand) 34.dp else 24.dp)
+            .border(1.5.dp, couleurDe(carte), CircleShape),
+        contentAlignment = Alignment.Center
     ) {
         Text(
-            text = label,
-            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
-            fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+            "${carte.cost}",
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+            fontSize = if (grand) 16.sp else 12.sp
+        )
+    }
+
+    Column(
+        Modifier
+            .align(Alignment.BottomStart)
+            .fillMaxWidth()
+            .padding(10.dp)
+    ) {
+        Box(
+            Modifier
+                .width(18.dp)
+                .height(2.dp)
+                .background(couleurDe(carte))
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            carte.nom,
+            color = Color.White,
+            fontFamily = Title,
+            fontWeight = FontWeight.Bold,
+            fontSize = if (grand) 18.sp else 13.sp,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            TYPES.firstOrNull { it.first == carte.type }?.second ?: carte.type,
+            color = Muted,
+            fontSize = if (grand) 12.sp else 10.sp
         )
     }
 }
 
 @Composable
-fun CardDetailDialog(
-    carte: Carte,
-    onDismiss: () -> Unit,
-    onAddCopy: () -> Unit,
-    onRemoveCopy: () -> Unit
-) {
-    val context = LocalContext.current
-    val imageResId = remember(carte.image) { carte.getDrawableResId(context) }
-
+private fun FicheCarte(carte: Carte, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = NightHigh,
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
-            modifier = Modifier
+        Column(
+            Modifier
                 .fillMaxWidth()
-                .padding(vertical = 16.dp)
+                .background(RiftBlue)
+                .border(1.dp, RiftLine)
+                .padding(20.dp)
         ) {
-            Column(
-                modifier = Modifier
+            CarteVierge(carte, Modifier.padding(horizontal = 36.dp), grand = true)
+
+            Text(
+                carte.nom.uppercase(),
+                color = Color.White,
+                fontFamily = Title,
+                fontWeight = FontWeight.Black,
+                fontSize = 22.sp,
+                modifier = Modifier.padding(top = 18.dp)
+            )
+            Text(
+                listOf(carte.set, carte.image, carte.rarete).filter { it.isNotEmpty() }
+                    .joinToString("  ·  ") { it.uppercase() },
+                color = Muted,
+                fontSize = 12.sp
+            )
+
+            Spacer(Modifier.height(14.dp))
+            Caracteristique("Domaine", carte.couleur.replaceFirstChar { it.uppercase() })
+            Caracteristique("Type", TYPES.firstOrNull { it.first == carte.type }?.second ?: carte.type)
+            Caracteristique("Coût", "${carte.cost}")
+            Caracteristique("Power", "${carte.power}")
+            if (carte.type == "unite") Caracteristique("Might", "${carte.might}")
+            if (carte.motsCles.isNotEmpty()) Caracteristique("Mots-clés", carte.motsCles.replace(",", ", "))
+            if (carte.tag.isNotEmpty()) Caracteristique("Tags", carte.tag.replace(",", ", "))
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                if (carte.quantity > 0) "Exemplaires possédés : ${carte.quantity}"
+                else "Pas encore obtenue. Cherche-la dans la boutique pendant une partie.",
+                color = if (carte.quantity > 0) Color.White else RiftOrange,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+
+            Spacer(Modifier.height(16.dp))
+            Box(
+                Modifier
                     .fillMaxWidth()
-                    .padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .height(46.dp)
+                    .border(BorderStroke(1.dp, RiftLine), RectangleShape)
+                    .clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center
             ) {
-                // Grande image
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .aspectRatio(0.72f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black.copy(alpha = 0.4f))
-                ) {
-                    if (imageResId != 0) {
-                        Image(
-                            painter = painterResource(id = imageResId),
-                            contentDescription = carte.nom,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                Text(
-                    text = carte.nom,
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center
-                )
-
-                Text(
-                    text = "${carte.set.uppercase()} • ${carte.image} • ${carte.rarete.uppercase()}",
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                // Stats de jeu
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(14.dp))
-                        .padding(vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    StatPill("Coût", "${carte.cost}")
-                    StatPill("Power", "${carte.power}")
-                    if (carte.type == "unite") {
-                        StatPill("Might", "${carte.might}")
-                    }
-                    StatPill("Type", carte.type.uppercase())
-                }
-
-                if (carte.motsCles.isNotEmpty() || carte.tag.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = "Mots-clés : ${carte.motsCles.ifEmpty { "—" }}  |  Tags : ${carte.tag.ifEmpty { "—" }}",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                // Contrôle de quantité (test de persistance locale)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Exemplaires : x${carte.quantity}",
-                        color = Smiley,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = onRemoveCopy,
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                            modifier = Modifier.size(38.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("-", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = onAddCopy,
-                            shape = CircleShape,
-                            colors = ButtonDefaults.buttonColors(containerColor = Sky),
-                            modifier = Modifier.size(38.dp),
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("+", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(14.dp))
-
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.15f))
-                ) {
-                    Text("Fermer", color = Color.White, fontWeight = FontWeight.Bold)
-                }
+                Text("Fermer", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
     }
 }
 
 @Composable
-private fun StatPill(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, color = Color.White.copy(alpha = 0.5f), fontSize = 10.sp)
-        Text(text = value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+private fun Caracteristique(label: String, valeur: String) {
+    Column {
+        Row(Modifier.padding(vertical = 7.dp)) {
+            Text(label, color = Muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(valeur, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(RiftLine.copy(alpha = 0.6f))
+        )
     }
 }

@@ -28,6 +28,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.maxim.paclearn.storage.CarteStorage
+import com.maxim.paclearn.storage.Catalogue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,6 +70,10 @@ class MainActivity : ComponentActivity() {
     private var money by mutableStateOf(0)
     private var time by mutableStateOf(0) // temps restant en sec
     private var status by mutableStateOf<Int?>(R.string.searching_position)
+    private var shopOpen by mutableStateOf(false)
+
+    private val collection by lazy { CarteStorage(this) }
+    private val shop by lazy { RunShop(Catalogue.load(this)) }
 
     private val askLocation = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -123,7 +129,18 @@ class MainActivity : ComponentActivity() {
             PacTheme {
                 Box(Modifier.fillMaxSize()) {
                     AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-                    Hud(secondsLeft = time, money = money, status = status)
+                    Hud(secondsLeft = time, money = money, status = status, onShop = { shopOpen = true })
+                    if (shopOpen) {
+                        ShopScreen(
+                            shop = shop,
+                            money = money,
+                            possedees = { collection.find(it.uniqueId())?.quantity ?: 0 },
+                            onAcheterCarte = ::buyCard,
+                            onAcheterAmelioration = ::buyUpgrade,
+                            onRelancer = ::rerollShop,
+                            onFermer = { shopOpen = false }
+                        )
+                    }
                 }
             }
         }
@@ -141,6 +158,29 @@ class MainActivity : ComponentActivity() {
             // Fin de partie : pour l'instant on revient a l'ecran de choix.
             finish()
         }
+    }
+
+    // La boutique peut etre ouverte pendant qu'on marche : on reverifie l'argent a chaque achat.
+    private fun buyCard(index: Int) {
+        val carte = shop.cartes[index] ?: return
+        val prix = prixCarte(carte)
+        if (money < prix) return
+        money -= prix
+        collection.addOrIncrement(carte)
+        shop.vendreCarte(index)
+    }
+
+    private fun buyUpgrade(index: Int) {
+        val amelioration = shop.ameliorations[index] ?: return
+        if (money < amelioration.prix) return
+        money -= amelioration.prix
+        shop.vendreAmelioration(index)
+    }
+
+    private fun rerollShop() {
+        if (money < PRIX_RELANCE) return
+        money -= PRIX_RELANCE
+        shop.relancer()
     }
 
     private fun hasLocationPermission() =

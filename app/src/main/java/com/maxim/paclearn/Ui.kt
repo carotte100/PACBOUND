@@ -234,7 +234,7 @@ private fun DurationCard(minutes: Int, modifier: Modifier, onClick: () -> Unit) 
 
 /** Ce qui s'affiche par-dessus la carte : chrono, cagnotte et messages d'etat. */
 @Composable
-fun Hud(secondsLeft: Int, money: Int, @StringRes status: Int?) {
+fun Hud(secondsLeft: Int, money: Int, @StringRes status: Int?, onShop: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
@@ -248,7 +248,14 @@ fun Hud(secondsLeft: Int, money: Int, @StringRes status: Int?) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             TimerPill(secondsLeft)
-            MoneyPill(money)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MoneyPill(money)
+                Box(Modifier.clip(PillShape).clickable(onClick = onShop)) {
+                    Pill {
+                        Text(text = "Boutique", color = Smiley, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
 
         // AnimatedContent garde l'ancien message affiche pendant qu'il s'efface.
