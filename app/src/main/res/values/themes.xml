@@ -1,8 +1,8 @@
 <resources>
     <!-- Habillage de la fenetre seulement : les couleurs de l'interface sont
-         gerees par PacTheme cote Compose. Le fond nuit evite un flash blanc
+         gerees par PacTheme cote Compose. Le fond bleu evite un flash blanc
          au lancement, avant que Compose ne dessine. -->
     <style name="Theme.PacLearn" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/night</item>
+        <item name="android:windowBackground">@color/fond</item>
     </style>
 </resources>

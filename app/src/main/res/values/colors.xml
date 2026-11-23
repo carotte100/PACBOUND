@@ -1,4 +1,27 @@
 <resources>
-    <!-- Meme valeur que Night dans Ui.kt -->
-    <color name="night">#FF0B1426</color>
+    <!-- Interface : le style de la collection Riftbound, pour tous les ecrans. -->
+    <color name="fond">#FF013951</color>
+    <color name="bordure">#FF336073</color>
+    <color name="accent">#FFF28C1B</color>
+    <color name="texte">#FFFFFFFF</color>
+    <color name="texte_discret">#99FFFFFF</color>
+    <color name="alerte">#FFFF5A5F</color>
+    <color name="fond_carte">#FF000000</color>
+
+    <!-- Le plan du jeu : sol vert, rues gris clair, facon Pokemon Go. -->
+    <color name="plan_sol">#FF9ED98B</color>
+    <color name="plan_batiment">#FF8BC77A</color>
+    <color name="plan_batiment_bord">#FF79B568</color>
+    <color name="plan_rue">#FFE4E8E3</color>
+    <color name="plan_rue_bord">#FFA4B3A1</color>
+    <color name="piece">#FFFFB300</color>
+    <color name="piece_bord">#FFFFFFFF</color>
+
+    <!-- Le joueur. Les deux premiers chiffres sont la transparence (00 = invisible, FF = opaque). -->
+    <color name="joueur_visage">#FFFFDD00</color>
+    <color name="joueur_contour">#FFFFFFFF</color>
+    <color name="joueur_traits">#FF000000</color>
+    <color name="joueur_regard">#55409CFF</color>
+    <color name="joueur_zone">#37409CFF</color>
+    <color name="joueur_zone_bord">#DCFFFFFF</color>
 </resources>

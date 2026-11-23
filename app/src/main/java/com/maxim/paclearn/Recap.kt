@@ -1,191 +1,140 @@
 package com.maxim.paclearn
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.maxim.paclearn.model.Amelioration
 import com.maxim.paclearn.model.Carte
 
-/** Ce qui s'est passe pendant la partie, pour l'ecran de fin. */
-data class RunStats(
+// La fin de partie : la fenetre "Quitter ?" et l'ecran de recap.
+
+/** Ce qui s'est passe pendant la partie, pour l'ecran de recap. */
+data class RecapPartie(
     val secondesJouees: Int,
-    val orbes: Int,
-    val gagne: Int,
-    val depense: Int,
-    val restant: Int,
+    val pieces: Int,
+    val argentRestant: Int, // perdu : l'argent ne survit pas a la partie
     val cartes: List<Carte>,
     val ameliorations: List<Amelioration>,
     val tempsEcoule: Boolean
-)
-
-/** Avant d'abandonner : l'argent et les ameliorations ne survivent pas a la partie. */
-@Composable
-fun QuitDialog(money: Int, ameliorations: Int, onRester: () -> Unit, onQuitter: () -> Unit) {
-    Dialog(onDismissRequest = onRester) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(RiftBlue)
-                .border(1.dp, RiftLine)
-                .padding(20.dp)
-        ) {
-            Text(
-                "QUITTER LA PARTIE ?",
-                color = Color.White,
-                fontFamily = Title,
-                fontWeight = FontWeight.Black,
-                fontSize = 22.sp
-            )
-            Spacer(Modifier.height(12.dp))
-            Text("Tu vas perdre :", color = Muted, fontSize = 14.sp)
-            Spacer(Modifier.height(6.dp))
-            Text("• $money € accumulés", color = RiftOrange, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            if (ameliorations > 0) {
-                Text(
-                    "• $ameliorations amélioration${if (ameliorations > 1) "s" else ""} active${if (ameliorations > 1) "s" else ""}",
-                    color = RiftOrange,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Les cartes achetées et ta réserve sont conservées.",
-                color = Color.White,
-                fontSize = 13.sp
-            )
-            Spacer(Modifier.height(20.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                BoutonPlein("Continuer", plein = true, modifier = Modifier.weight(1f), onClick = onRester)
-                BoutonPlein("Quitter", plein = false, modifier = Modifier.weight(1f), onClick = onQuitter)
-            }
-        }
-    }
+) {
+    val argentGagne get() = pieces * VALEUR_PIECE
+    // On commence a 0 € : ce qui n'est plus dans la poche a ete depense.
+    val argentDepense get() = argentGagne - argentRestant
 }
 
+/** Avant d'abandonner, on rappelle ce qui sera perdu. */
 @Composable
-fun RecapScreen(stats: RunStats, onTerminer: () -> Unit) {
-    BackHandler(onBack = onTerminer)
-
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(RiftBlue)
-            .clickable(enabled = false) {}
-            .systemBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
+fun FenetreQuitter(argent: Int, nbAmeliorations: Int, onRester: () -> Unit, onQuitter: () -> Unit) {
+    Fenetre(onFermer = onRester) {
+        Titre(stringResource(R.string.quitter_titre))
         Text(
-            if (stats.tempsEcoule) "TEMPS ÉCOULÉ" else "PARTIE TERMINÉE",
-            color = Color.White,
-            fontFamily = Title,
-            fontWeight = FontWeight.Black,
-            fontSize = 32.sp,
-            modifier = Modifier.padding(top = 20.dp)
+            text = stringResource(R.string.quitter_perte),
+            modifier = Modifier.padding(top = 12.dp, bottom = 6.dp),
+            color = colorResource(R.color.texte_discret)
         )
-        Text("Récapitulatif de la partie", color = Muted, fontSize = 13.sp)
-
-        Spacer(Modifier.height(20.dp))
-        Ligne("Durée jouée", "%d:%02d".format(stats.secondesJouees / 60, stats.secondesJouees % 60))
-        Ligne("Pièces ramassées", "${stats.orbes}")
-        Ligne("Argent gagné", "${stats.gagne} €")
-        Ligne("Argent dépensé", "${stats.depense} €")
-        Ligne("Argent perdu", "${stats.restant} €", alerte = stats.restant > 0)
-
-        Titre("CARTES OBTENUES")
-        if (stats.cartes.isEmpty()) {
-            Text("Aucune carte achetée cette partie.", color = Muted, fontSize = 13.sp)
-        } else {
-            stats.cartes.chunked(3).forEach { rangee ->
-                Row(
-                    Modifier.padding(bottom = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    rangee.forEach { CarteVierge(it, Modifier.weight(1f)) }
-                    repeat(3 - rangee.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
-        }
-
-        if (stats.ameliorations.isNotEmpty()) {
-            Titre("AMÉLIORATIONS UTILISÉES")
-            stats.ameliorations.forEach {
-                Text("• ${it.text.replaceFirstChar { c -> c.uppercase() }}", color = Color.White, fontSize = 14.sp)
-            }
-        }
-
-        Spacer(Modifier.height(28.dp))
-        BoutonPlein("Retour à l'accueil", plein = true, modifier = Modifier.fillMaxWidth(), onClick = onTerminer)
-        Spacer(Modifier.height(24.dp))
-    }
-}
-
-@Composable
-private fun Titre(texte: String) {
-    Text(
-        texte,
-        color = Color.White,
-        fontFamily = Title,
-        fontWeight = FontWeight.Black,
-        fontSize = 20.sp,
-        modifier = Modifier.padding(top = 28.dp, bottom = 10.dp)
-    )
-}
-
-@Composable
-private fun Ligne(label: String, valeur: String, alerte: Boolean = false) {
-    Column {
-        Row(Modifier.padding(vertical = 9.dp)) {
-            Text(label, color = Muted, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.quitter_argent, argent),
+            color = colorResource(R.color.accent),
+            fontWeight = FontWeight.Bold
+        )
+        if (nbAmeliorations > 0) {
             Text(
-                valeur,
-                color = if (alerte) RiftOrange else Color.White,
-                fontSize = 14.sp,
+                text = stringResource(R.string.quitter_ameliorations, nbAmeliorations),
+                color = colorResource(R.color.accent),
                 fontWeight = FontWeight.Bold
             )
         }
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(RiftLine.copy(alpha = 0.6f))
+        Text(
+            text = stringResource(R.string.quitter_conserve),
+            modifier = Modifier.padding(top = 8.dp, bottom = 20.dp),
+            fontSize = 13.sp
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Bouton(stringResource(R.string.continuer), onRester, Modifier.weight(1f), principal = true)
+            Bouton(stringResource(R.string.quitter), onQuitter, Modifier.weight(1f))
+        }
     }
 }
 
 @Composable
-private fun BoutonPlein(texte: String, plein: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier
-            .height(48.dp)
-            .background(if (plein) RiftOrange else Color.Transparent)
-            .border(1.dp, if (plein) RiftOrange else RiftLine)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(texte, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+fun EcranRecap(recap: RecapPartie, onTerminer: () -> Unit) {
+    BackHandler(onBack = onTerminer)
+    Surface(Modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .systemBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            Titre(
+                texte = stringResource(if (recap.tempsEcoule) R.string.recap_temps_ecoule else R.string.recap_terminee),
+                modifier = Modifier.padding(top = 20.dp),
+                grand = true
+            )
+            Text(
+                text = stringResource(R.string.recap_sous_titre),
+                modifier = Modifier.padding(bottom = 20.dp),
+                color = colorResource(R.color.texte_discret),
+                fontSize = 13.sp
+            )
+            LigneInfo(stringResource(R.string.recap_duree), formatTemps(recap.secondesJouees))
+            LigneInfo(stringResource(R.string.recap_pieces), "${recap.pieces}")
+            LigneInfo(stringResource(R.string.recap_gagne), stringResource(R.string.euros, recap.argentGagne))
+            LigneInfo(stringResource(R.string.recap_depense), stringResource(R.string.euros, recap.argentDepense))
+            LigneInfo(
+                intitule = stringResource(R.string.recap_perdu),
+                valeur = stringResource(R.string.euros, recap.argentRestant),
+                enAvant = recap.argentRestant > 0
+            )
+
+            Titre(stringResource(R.string.recap_cartes), Modifier.padding(top = 28.dp, bottom = 10.dp))
+            if (recap.cartes.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.recap_aucune_carte),
+                    color = colorResource(R.color.texte_discret),
+                    fontSize = 13.sp
+                )
+            }
+            // Trois cartes par ligne.
+            recap.cartes.chunked(3).forEach { ligne ->
+                Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ligne.forEach { VisuelCarte(it, Modifier.weight(1f)) }
+                    repeat(3 - ligne.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+
+            if (recap.ameliorations.isNotEmpty()) {
+                Titre(stringResource(R.string.recap_ameliorations), Modifier.padding(top = 28.dp, bottom = 10.dp))
+                recap.ameliorations.forEach {
+                    Text(stringResource(R.string.puce, it.text.replaceFirstChar { c -> c.uppercase() }))
+                }
+            }
+
+            Bouton(
+                texte = stringResource(R.string.retour_accueil),
+                onClick = onTerminer,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 28.dp),
+                principal = true
+            )
+        }
     }
 }

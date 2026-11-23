@@ -15,7 +15,7 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.PacLearn">
         <activity
-            android:name=".TimeSelectActivity"
+            android:name=".AccueilActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -24,7 +24,7 @@
         </activity>
 
         <activity
-            android:name=".MainActivity"
+            android:name=".JeuActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 

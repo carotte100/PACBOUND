@@ -1,12 +1,90 @@
 <resources>
     <string name="app_name">PacLearn</string>
-    <string name="tagline">Ramasse un max de pièces avant la fin du chrono</string>
-    <string name="roads_unavailable">Impossible de charger les rues autour de toi</string>
-    <string name="loading_map">Chargement de la carte…</string>
-    <string name="osm_attribution">© les contributeurs d\'OpenStreetMap</string>
-    <string name="location_denied">Autorisation de localisation refusée</string>
-    <string name="location_off">Localisation désactivée sur l\'appareil</string>
-    <string name="searching_position">Recherche de ta position…</string>
-    <string name="choose_duration">Durée de la partie</string>
-    <string name="minutes_label">minutes</string>
+
+    <!-- Commun -->
+    <string name="euros">%1$d €</string>
+    <string name="puce">• %1$s</string>
+    <string name="retour">Retour</string>
+    <string name="fermer">Fermer</string>
+    <string name="quitter">Quitter</string>
+    <string name="continuer">Continuer</string>
+    <string name="boutique">Boutique</string>
+
+    <!-- Accueil -->
+    <string name="slogan">Ramasse un max de pièces avant la fin du chrono</string>
+    <string name="duree_partie">Durée de la partie</string>
+    <string name="duree_minutes">%1$d min</string>
+    <string name="ma_collection">Ma collection</string>
+
+    <!-- Jeu -->
+    <string name="recherche_position">Recherche de ta position…</string>
+    <string name="localisation_desactivee">Localisation désactivée sur l\'appareil</string>
+    <string name="localisation_refusee">Autorisation de localisation refusée</string>
+    <string name="chargement_plan">Chargement de la carte…</string>
+    <string name="rues_indisponibles">Impossible de charger les rues autour de toi</string>
+    <string name="attribution_osm">© les contributeurs d\'OpenStreetMap</string>
+    <string name="info">ⓘ</string>
+
+    <!-- Fenetre "Quitter ?" -->
+    <string name="quitter_titre">Quitter la partie ?</string>
+    <string name="quitter_perte">Tu vas perdre :</string>
+    <string name="quitter_argent">• %1$d € accumulés</string>
+    <string name="quitter_ameliorations">• Tes améliorations actives (%1$d)</string>
+    <string name="quitter_conserve">Les cartes achetées et ta réserve sont conservées.</string>
+
+    <!-- Recap de fin de partie -->
+    <string name="recap_temps_ecoule">Temps écoulé</string>
+    <string name="recap_terminee">Partie terminée</string>
+    <string name="recap_sous_titre">Récapitulatif de la partie</string>
+    <string name="recap_duree">Durée jouée</string>
+    <string name="recap_pieces">Pièces ramassées</string>
+    <string name="recap_gagne">Argent gagné</string>
+    <string name="recap_depense">Argent dépensé</string>
+    <string name="recap_perdu">Argent perdu</string>
+    <string name="recap_cartes">Cartes obtenues</string>
+    <string name="recap_aucune_carte">Aucune carte achetée cette partie.</string>
+    <string name="recap_ameliorations">Améliorations utilisées</string>
+    <string name="retour_accueil">Retour à l\'accueil</string>
+
+    <!-- Boutique -->
+    <string name="argent_disponible">%1$d € disponibles</string>
+    <string name="cartes">Cartes</string>
+    <string name="reserve_titre">Réserve %1$d / %2$d</string>
+    <string name="reserve_vide">Réserve jusqu\'à %1$d cartes pour les acheter lors d\'une prochaine partie.</string>
+    <string name="ameliorations">Améliorations</string>
+    <string name="actives">Actives cette partie</string>
+    <string name="relancer">Relancer la vitrine · %1$d €</string>
+    <string name="vendue">Vendue</string>
+    <string name="reservee">Réservée</string>
+    <string name="achetee">Achetée</string>
+    <string name="reserver">Réserver</string>
+    <string name="retirer">Retirer</string>
+    <string name="possedee">Possédée ×%1$d</string>
+    <string name="nouvelle">Nouvelle</string>
+    <string name="effet">+%1$s %2$s</string>
+
+    <!-- Collection -->
+    <string name="collection">Collection</string>
+    <string name="collection_compte">%1$d / %2$d cartes · %3$d exemplaires</string>
+    <string name="rechercher">Rechercher</string>
+    <string name="filtres">Filtres</string>
+    <string name="masquer_filtres">Masquer les filtres</string>
+    <string name="aucune_carte_filtre">Aucune carte ne correspond à ces filtres.</string>
+    <string name="set_titre">%1$s %2$d / %3$d</string>
+    <string name="trier_par">Trier par</string>
+    <string name="domaine">Domaine</string>
+    <string name="type">Type</string>
+    <string name="cout">Coût</string>
+    <string name="nom">Nom</string>
+    <string name="rarete">Rareté</string>
+    <string name="type_unite">Unité</string>
+    <string name="type_sort">Sort</string>
+    <string name="type_equipement">Équipement</string>
+    <string name="power">Power</string>
+    <string name="might">Might</string>
+    <string name="mots_cles">Mots-clés</string>
+    <string name="tags">Tags</string>
+    <string name="quantite">×%1$d</string>
+    <string name="exemplaires">Exemplaires possédés : %1$d</string>
+    <string name="pas_obtenue">Pas encore obtenue. Cherche-la dans la boutique pendant une partie.</string>
 </resources>
