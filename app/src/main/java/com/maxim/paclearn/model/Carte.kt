@@ -3,11 +3,7 @@ package com.maxim.paclearn.model
 import android.content.Context
 import org.json.JSONObject
 
-/**
- * Modèle représentant une carte Riftbound.
- * Compatible à la fois avec le format du serveur distant (boutique / catalogue)
- * et avec le format de la collection locale stockée sur le téléphone.
- */
+/** Une carte Riftbound, au format du catalogue comme de la collection. */
 data class Carte(
     val nom: String,
     val set: String,
@@ -20,21 +16,14 @@ data class Carte(
     val might: Int = 0,
     val tag: String = "",
     val motsCles: String = "",
-    val image: String = "", // ex: "SFD-005", "RAD-043" (Set-Numéro)
+    val image: String = "", // ex. "SFD-005"
     val foil: Boolean = false,
     var quantity: Int = 1
 ) {
-    /**
-     * Identifiant unique pour distinguer une carte dans la collection
-     * selon son nom, son set, sa variante et son état foil.
-     */
     fun uniqueId(): String =
         "${nom.lowercase().replace(" ", "_")}_${set.lowercase()}_${variant.lowercase()}_${if (foil) "foil" else "normal"}"
 
-    /**
-     * Nom du fichier drawable Android (minuscules, tirets remplacés par des underscores),
-     * ex: "SFD-005" -> "sfd_005" pour res/drawable/sfd_005.webp
-     */
+    /** "SFD-005" -> "sfd_005", le nom du fichier dans res/drawable. */
     fun drawableName(): String =
         if (image.isNotEmpty()) image.lowercase().replace("-", "_")
         else nom.lowercase()
@@ -43,17 +32,9 @@ data class Carte(
             .replace("'", "_")
             .replace("ê", "e").replace("é", "e").replace("è", "e").replace("ô", "o")
 
-    /**
-     * Récupère l'identifiant de ressource drawable (R.drawable.xxx) si présent dans res/drawable/.
-     */
-    fun getDrawableResId(context: Context): Int {
-        val resName = drawableName()
-        return context.resources.getIdentifier(resName, "drawable", context.packageName)
-    }
+    fun getDrawableResId(context: Context): Int =
+        context.resources.getIdentifier(drawableName(), "drawable", context.packageName)
 
-    /**
-     * Convertit la carte vers le format JSON de collection locale ("collec").
-     */
     fun toCollectionJson(): JSONObject {
         val json = JSONObject()
         json.put(KEY_TYPE_OBJET, "carte")
@@ -65,20 +46,15 @@ data class Carte(
         json.put(KEY_QUANTITY, quantity)
         json.put(KEY_COULEUR, couleur)
         json.put(KEY_TYPE, type)
-
         if (image.isNotEmpty()) json.put(KEY_IMAGE, image)
         if (cost > 0) json.put(KEY_COST, cost)
         if (power > 0) json.put(KEY_POWER, power)
         if (might > 0) json.put(KEY_MIGHT, might)
         if (tag.isNotEmpty()) json.put(KEY_TAG, tag)
         if (motsCles.isNotEmpty()) json.put(KEY_MOTS_CLES, motsCles)
-
         return json
     }
 
-    /**
-     * Convertit la carte vers le format JSON du catalogue serveur.
-     */
     fun toServerJson(): JSONObject {
         val json = JSONObject()
         json.put(KEY_TYPE_OBJET, "carte")
@@ -114,23 +90,12 @@ data class Carte(
         const val KEY_MOTS_CLES = "mots_cles"
         const val KEY_IMAGE = "image"
 
-        /**
-         * Désérialise un JSONObject en objet Carte, qu'il vienne du serveur distant
-         * ou de la collection locale.
-         */
         fun fromJson(json: JSONObject): Carte {
-            val foilValue = when {
-                json.has(KEY_FOIL) -> {
-                    val rawFoil = json.opt(KEY_FOIL)
-                    when (rawFoil) {
-                        is Boolean -> rawFoil
-                        is String -> rawFoil.equals("oui", ignoreCase = true) || rawFoil.equals("true", ignoreCase = true)
-                        else -> false
-                    }
-                }
+            val foil = when (val brut = json.opt(KEY_FOIL)) {
+                is Boolean -> brut
+                is String -> brut.equals("oui", ignoreCase = true) || brut.equals("true", ignoreCase = true)
                 else -> false
             }
-
             return Carte(
                 nom = json.optString(KEY_NOM, ""),
                 set = json.optString(KEY_SET, ""),
@@ -144,7 +109,7 @@ data class Carte(
                 tag = json.optString(KEY_TAG, ""),
                 motsCles = json.optString(KEY_MOTS_CLES, ""),
                 image = json.optString(KEY_IMAGE, ""),
-                foil = foilValue,
+                foil = foil,
                 quantity = json.optInt(KEY_QUANTITY, 1)
             )
         }

@@ -1,12 +1,9 @@
-package com.maxim.paclearn.storage
+package com.maxim.paclearn.controller.storage
 
 import android.content.Context
 import org.json.JSONArray
 
-/**
- * Les cartes mises de cote dans la boutique pour les acheter a une prochaine partie.
- * On ne garde que leur identifiant : la carte elle-meme vient du catalogue.
- */
+/** Les cartes mises de cote dans la boutique (leurs identifiants seulement). */
 class Reserve(context: Context) {
 
     private val prefs = context.getSharedPreferences("reserve", Context.MODE_PRIVATE)

@@ -1,4 +1,4 @@
-package com.maxim.paclearn
+package com.maxim.paclearn.view
 
 import android.content.Context
 import android.graphics.Canvas
@@ -8,24 +8,23 @@ import android.graphics.Path
 import android.graphics.Point
 import android.graphics.RectF
 import androidx.core.content.ContextCompat
+import com.maxim.paclearn.R
+import com.maxim.paclearn.model.RepereLocal
+import com.maxim.paclearn.model.Rue
+import com.maxim.paclearn.model.Zone
+import kotlin.math.max
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.Projection
 import org.osmdroid.views.overlay.Overlay
-import kotlin.math.max
 
-// Le plan du jeu. Un calque (Overlay) est une couche de dessin : osmdroid appelle
-// draw() de chacun a chaque image, dans l'ordre ou JeuActivity les a ajoutes :
-// les rues, puis les pieces, puis le joueur par-dessus.
-// La projection convertit une position GPS en pixels, pour le zoom actuel.
+// Le dessin du plan. Chaque calque (Overlay osmdroid) est redessine a chaque image :
+// les rues, puis les pieces, puis le joueur.
 
 /** Un pinceau de la couleur [couleur] de colors.xml. */
 private fun pinceau(context: Context, couleur: Int) =
     Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ContextCompat.getColor(context, couleur) }
 
-/**
- * Les rues et les batiments de la zone chargee, sur le fond vert de la MapView.
- * Pas d'images de carte a telecharger ni de noms de rues : on dessine les donnees OSM.
- */
+/** Les rues et batiments de la zone chargee, dessines a partir des donnees OSM. */
 class CalqueRues(zone: Zone, centre: GeoPoint, context: Context) : Overlay() {
 
     private val repere = RepereLocal(centre)
@@ -37,8 +36,7 @@ class CalqueRues(zone: Zone, centre: GeoPoint, context: Context) : Overlay() {
     private val batiment = pinceau(context, R.color.plan_batiment)
     private val bordBatiment = pinceau(context, R.color.plan_batiment_bord).apply { style = Paint.Style.STROKE; strokeWidth = densite }
 
-    // Les donnees sont converties une fois pour toutes en metres autour du centre.
-    // Les rues sont groupees par largeur : drawLines n'accepte qu'une epaisseur par appel.
+    // Converties une fois en metres ; groupees par largeur (une epaisseur par drawLines).
     private val groupes = zone.rues
         .groupBy { if (it.demiLargeur == 0.0) LARGEUR_PIETONNE_M else it.demiLargeur * 2 }
         .map { (largeur, rues) -> GroupeDeRues(largeur.toFloat(), rues.flatMap { segmentsEnMetres(it) }.toFloatArray()) }
@@ -51,14 +49,12 @@ class CalqueRues(zone: Zone, centre: GeoPoint, context: Context) : Overlay() {
     private val point = Point()
 
     override fun draw(canvas: Canvas, projection: Projection) {
-        // Pour passer des metres aux pixels : la position du centre a l'ecran, et l'echelle.
         projection.toPixels(repere.origine, point)
         val cx = point.x.toFloat()
         val cy = point.y.toFloat()
         val echelle = projection.metersToPixels(100f, repere.origine.latitude, projection.zoomLevel) / 100f
 
-        // Seuls les batiments a l'ecran sont dessines : un dessin bien plus grand que
-        // l'ecran peut depasser ce que la carte graphique des vieux telephones accepte.
+        // Seuls les batiments visibles : un trop grand dessin plante les vieux GPU.
         val ecran = RectF(-cx / echelle, (cy - canvas.height) / echelle, (canvas.width - cx) / echelle, cy / echelle)
         formeBatiments.rewind()
         for (b in batiments) {
@@ -72,8 +68,7 @@ class CalqueRues(zone: Zone, centre: GeoPoint, context: Context) : Overlay() {
         canvas.drawPath(formeBatiments, bordBatiment)
 
         for (groupe in groupes) groupe.versPixels(cx, cy, echelle)
-        // Tous les bords d'abord, puis tout le gris : aux carrefours, le gris
-        // recouvre les bords des rues qui se croisent.
+        // Tous les bords d'abord, puis le gris : les carrefours se raccordent proprement.
         for (groupe in groupes) {
             bordRue.strokeWidth = largeurPx(groupe, echelle) + 3 * densite
             canvas.drawLines(groupe.pixels, bordRue)
@@ -181,13 +176,12 @@ class CalqueJoueur(context: Context, private val rayonRamassageM: Double) : Over
         val x = point.x.toFloat()
         val y = point.y.toFloat()
 
-        // La zone de ramassage a sa vraie taille : 15 m convertis en pixels au zoom actuel.
+        // Zone de ramassage a sa vraie taille en metres.
         val rayonZone = projection.metersToPixels(rayonRamassageM.toFloat(), ici.latitude, projection.zoomLevel)
         canvas.drawCircle(x, y, rayonZone, zone)
         canvas.drawCircle(x, y, rayonZone, bordZone)
 
-        // Le regard : une part de disque tournee vers le cap. arcTo compte les angles
-        // depuis l'est, la boussole depuis le nord : d'ou le -90.
+        // Le regard, tourne vers le cap (arcTo part de l'est, la boussole du nord : -90).
         cadre.set(x - rayonRegard, y - rayonRegard, x + rayonRegard, y + rayonRegard)
         formeRegard.rewind()
         formeRegard.moveTo(x, y)

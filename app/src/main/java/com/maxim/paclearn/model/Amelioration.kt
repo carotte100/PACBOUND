@@ -2,9 +2,7 @@ package com.maxim.paclearn.model
 
 import org.json.JSONObject
 
-/**
- * Modèle représentant une amélioration de boutique Riftbound.
- */
+/** Une amelioration de la boutique : ne dure que la partie en cours. */
 data class Amelioration(
     val id: String,
     val rarete: String,
@@ -14,24 +12,17 @@ data class Amelioration(
 ) {
     companion object {
         fun fromJson(id: String, json: JSONObject): Amelioration {
-            val effetsMap = mutableMapOf<String, String>()
-            val effetObj = json.optJSONObject("effet")
-            effetObj?.let {
-                val keys = it.keys()
-                while (keys.hasNext()) {
-                    val key = keys.next()
-                    effetsMap[key] = it.optString(key, "")
-                }
+            val effets = mutableMapOf<String, String>()
+            json.optJSONObject("effet")?.let { effet ->
+                effet.keys().forEach { effets[it] = effet.optString(it, "") }
             }
-
             return Amelioration(
                 id = id,
                 rarete = json.optString("rarete", "commune"),
                 text = json.optString("text", ""),
-                effets = effetsMap,
+                effets = effets,
                 prix = json.optInt("prix", 0)
             )
         }
     }
 }
-

@@ -1,4 +1,4 @@
-package com.maxim.paclearn
+package com.maxim.paclearn.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -8,7 +8,7 @@ import org.osmdroid.util.GeoPoint
 import kotlin.math.abs
 import kotlin.math.cos
 
-/** Verifie que placerPieces (Rues.kt) pose les pieces au bon endroit, sur un quartier invente. */
+/** Verifie que placerPieces (model/Plan.kt) pose les pieces au bon endroit, sur un quartier invente. */
 class PlacementPiecesTest {
 
     private val centre = GeoPoint(45.0, 6.0)
@@ -81,5 +81,56 @@ class PlacementPiecesTest {
     fun pasDePieceHorsDeLaZone() {
         val pieces = placerPieces(Zone(listOf(ruePrincipale), emptyList()), centre, demiCote = 100.0, espacement = 90.0)
         pieces.forEach { assertTrue(abs(estDe(it)) <= 100.0) }
+    }
+
+    @Test
+    fun sansPlanLesPiecesRestentDansLaZoneEtEspacees() {
+        val pieces = placerPiecesSansPlan(centre, demiCote = 400.0, espacement = 90.0)
+        assertTrue(pieces.size > 50)
+        pieces.forEach { assertTrue(abs(estDe(it)) <= 400.0 && abs(nordDe(it)) <= 400.0) }
+        for (i in pieces.indices) for (j in i + 1 until pieces.size) {
+            assertTrue(pieces[i].distanceToAsDouble(pieces[j]) >= 80.0)
+        }
+    }
+
+    @Test
+    fun sansPlanLesPiecesNeBougentPasQuandOnRecharge() {
+        // 200 m plus loin, les pieces communes aux deux zones sont aux memes cellules.
+        val avant = placerPiecesSansPlan(centre, 400.0, 90.0).map { celluleDe(it) }.toSet()
+        val apres = placerPiecesSansPlan(a(200.0, 0.0), 400.0, 90.0).map { celluleDe(it) }.toSet()
+        assertTrue((avant intersect apres).size > avant.size / 2)
+    }
+
+    @Test
+    fun cadreCouvreEtContient() {
+        val grand = cadreAutour(centre, 1000.0)
+        val petit = cadreAutour(a(300.0, 300.0), 400.0)
+        assertTrue(grand.couvre(petit))
+        assertFalse("un petit cadre ne couvre pas un grand", petit.couvre(grand))
+        assertTrue(grand.contient(a(900.0, -900.0)))
+        assertFalse("hors du cadre", grand.contient(a(1100.0, 0.0)))
+    }
+
+    @Test
+    fun decouperPuisFusionnerRendLaMemeZone() {
+        val zone = Zone(listOf(ruePrincipale, rueTransversale), listOf(maisons))
+        val tuiles = tuilesDe(cadreAutour(centre, 400.0))
+        assertTrue(tuiles.size >= 2)
+        val morceaux = decouper(zone, tuiles)
+        assertEquals(tuiles.size, morceaux.size) // une entree par tuile, meme vide
+        val refaite = fusionner(morceaux.values.toList())
+        assertEquals(2, refaite.rues.size) // une rue a cheval sur plusieurs tuiles n'est gardee qu'une fois
+        assertEquals(1, refaite.batiments.size)
+    }
+
+    @Test
+    fun lesEclatsSuiventLeNombreDExemplaires() {
+        assertEquals(Eclat.AUCUN, eclatDe(4))
+        assertEquals(Eclat.BRILLANTE, eclatDe(5))
+        assertEquals(Eclat.BRILLANTE, eclatDe(9))
+        assertEquals(Eclat.HOLOGRAPHIQUE, eclatDe(10))
+        assertEquals(Eclat.LEGENDAIRE, eclatDe(57))
+        assertEquals(Eclat.HOLOGRAPHIQUE, Eclat.BRILLANTE.suivant)
+        assertEquals(null, Eclat.LEGENDAIRE.suivant)
     }
 }

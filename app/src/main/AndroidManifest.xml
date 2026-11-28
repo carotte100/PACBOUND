@@ -13,9 +13,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.PacLearn">
+        android:theme="@style/Theme.Pacbound">
         <activity
-            android:name=".AccueilActivity"
+            android:name=".controller.AccueilActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -24,12 +24,12 @@
         </activity>
 
         <activity
-            android:name=".JeuActivity"
+            android:name=".controller.JeuActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 
         <activity
-            android:name=".CollectionActivity"
+            android:name=".controller.CollectionActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
     </application>

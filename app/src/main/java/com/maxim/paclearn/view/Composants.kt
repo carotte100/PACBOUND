@@ -1,10 +1,11 @@
-package com.maxim.paclearn
+package com.maxim.paclearn.view
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,21 +14,19 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
@@ -38,33 +37,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.maxim.paclearn.R
 import com.maxim.paclearn.model.Carte
+import com.maxim.paclearn.model.eclatDe
 
-// Ce qui sert a tous les ecrans : le theme, et les petits elements d'interface
-// (titre, bouton, panneau, fenetre, ligne d'info, visuel d'une carte).
-// Toutes les couleurs viennent de res/values/colors.xml, tous les textes de strings.xml.
+// Les petits elements d'interface partages par tous les ecrans.
 
-/**
- * Donne les couleurs de colors.xml aux composants Material : grace a lui, un
- * Text est blanc, un Button orange, une Surface bleue, sans rien preciser.
- */
-@Composable
-fun PacTheme(contenu: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = colorResource(R.color.accent),
-            onPrimary = colorResource(R.color.texte),
-            background = colorResource(R.color.fond),
-            onBackground = colorResource(R.color.texte),
-            surface = colorResource(R.color.fond),
-            onSurface = colorResource(R.color.texte),
-            outline = colorResource(R.color.bordure)
-        ),
-        content = contenu
-    )
-}
-
-/** Un titre en majuscules et en serif, comme sur les cartes Riftbound. */
+/** Titre en majuscules et en serif, comme sur les cartes Riftbound. */
 @Composable
 fun Titre(texte: String, modifier: Modifier = Modifier, grand: Boolean = false) {
     Text(
@@ -76,10 +55,46 @@ fun Titre(texte: String, modifier: Modifier = Modifier, grand: Boolean = false) 
     )
 }
 
-/**
- * Le bouton du jeu, rectangulaire. [principal] : rempli d'orange, pour l'action
- * importante (acheter, continuer). Sinon : un simple contour.
- */
+/** Le fond de chaque ecran : bleu nuit, un peu plus sombre vers le bas. */
+@Composable
+fun Fond(modifier: Modifier = Modifier, contenu: @Composable BoxScope.() -> Unit) {
+    Surface(modifier, color = colorResource(R.color.fond)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(colorResource(R.color.fond), colorResource(R.color.fond_profond)))),
+            content = contenu
+        )
+    }
+}
+
+/** Un bloc aux coins arrondis, un peu plus clair que le fond, pour regrouper un contenu. */
+@Composable
+fun Bloc(modifier: Modifier = Modifier, contenu: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = colorResource(R.color.surface),
+        border = BorderStroke(1.dp, colorResource(R.color.bordure))
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = contenu)
+    }
+}
+
+/** Petit intitule de section, en capitales espacees et en orange. */
+@Composable
+fun Intitule(texte: String, modifier: Modifier = Modifier) {
+    Text(
+        text = texte.uppercase(),
+        modifier = modifier,
+        color = colorResource(R.color.accent),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 2.sp
+    )
+}
+
+/** Bouton arrondi et plat : orange si [principal], sinon bleu avec un contour. */
 @Composable
 fun Bouton(
     texte: String,
@@ -90,25 +105,30 @@ fun Bouton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 48.dp),
         enabled = actif,
-        shape = RectangleShape,
+        shape = RoundedCornerShape(12.dp),
         colors = if (principal) ButtonDefaults.buttonColors()
         else ButtonDefaults.buttonColors(
-            containerColor = colorResource(R.color.fond),
+            containerColor = colorResource(R.color.surface),
             contentColor = colorResource(R.color.texte)
         ),
         border = if (principal) null else BorderStroke(1.dp, colorResource(R.color.bordure)),
-        contentPadding = PaddingValues(horizontal = 12.dp)
+        contentPadding = PaddingValues(horizontal = 14.dp)
     ) {
         Text(texte, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
-/** Un encadre au fond bleu, pour poser du texte lisible par-dessus le plan. */
+/** Encadre arrondi pour poser du texte lisible par-dessus le plan. */
 @Composable
 fun Panneau(modifier: Modifier = Modifier, contenu: @Composable RowScope.() -> Unit) {
-    Surface(modifier, border = BorderStroke(1.dp, colorResource(R.color.bordure))) {
+    Surface(
+        modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = colorResource(R.color.surface),
+        border = BorderStroke(1.dp, colorResource(R.color.bordure))
+    ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -118,17 +138,21 @@ fun Panneau(modifier: Modifier = Modifier, contenu: @Composable RowScope.() -> U
     }
 }
 
-/** Une fenetre par-dessus l'ecran : "Quitter ?", fiche d'une carte. */
+/** Fenetre par-dessus l'ecran ("Quitter ?", fiche d'une carte). */
 @Composable
 fun Fenetre(onFermer: () -> Unit, contenu: @Composable ColumnScope.() -> Unit) {
     Dialog(onDismissRequest = onFermer) {
-        Surface(border = BorderStroke(1.dp, colorResource(R.color.bordure))) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = colorResource(R.color.surface),
+            border = BorderStroke(1.dp, colorResource(R.color.bordure))
+        ) {
             Column(Modifier.padding(20.dp), content = contenu)
         }
     }
 }
 
-/** Une ligne "intitule ....... valeur", soulignee. */
+/** Ligne "intitule ....... valeur", soulignee. */
 @Composable
 fun LigneInfo(intitule: String, valeur: String, enAvant: Boolean = false) {
     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -143,7 +167,7 @@ fun LigneInfo(intitule: String, valeur: String, enAvant: Boolean = false) {
     HorizontalDivider(color = colorResource(R.color.bordure))
 }
 
-/** L'image d'une carte (res/drawable), ou son nom sur fond noir si l'image manque. */
+/** L'image d'une carte (res/drawable), ou son nom sur fond noir si l'image manque, avec son eclat. */
 @Composable
 fun VisuelCarte(carte: Carte, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -151,8 +175,8 @@ fun VisuelCarte(carte: Carte, modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxWidth()
-            .aspectRatio(63f / 88f) // le format d'une carte a jouer
-            .clip(RoundedCornerShape(8.dp))
+            .aspectRatio(63f / 88f) // format d'une carte a jouer
+            .eclat(eclatDe(carte.quantity)) // effet a partir de 5 exemplaires (Eclats.kt)
             .background(colorResource(R.color.fond_carte))
     ) {
         if (image != 0) {

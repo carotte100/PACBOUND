@@ -1,12 +1,24 @@
 <resources>
     <!-- Interface : le style de la collection Riftbound, pour tous les ecrans. -->
     <color name="fond">#FF013951</color>
+    <color name="fond_profond">#FF00202F</color>
+    <color name="surface">#FF0A4560</color>
     <color name="bordure">#FF336073</color>
     <color name="accent">#FFF28C1B</color>
     <color name="texte">#FFFFFFFF</color>
     <color name="texte_discret">#99FFFFFF</color>
     <color name="alerte">#FFFF5A5F</color>
     <color name="fond_carte">#FF000000</color>
+    <color name="icone_fond">#FF043651</color>
+
+    <!-- Les eclats des cartes de la collection (5, 10 et 20 exemplaires). -->
+    <color name="eclat_or">#FFE0A82E</color>
+    <color name="eclat_or_clair">#FFFFF1B8</color>
+    <color name="holo_1">#FFFF6B9A</color>
+    <color name="holo_2">#FFFFC25C</color>
+    <color name="holo_3">#FF7CF0B5</color>
+    <color name="holo_4">#FF5EC8FF</color>
+    <color name="holo_5">#FFB58CFF</color>
 
     <!-- Le plan du jeu : sol vert, rues gris clair, facon Pokemon Go. -->
     <color name="plan_sol">#FF9ED98B</color>

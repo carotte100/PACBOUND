@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PacLearn"
+rootProject.name = "PACBOUND"
 include ':app'

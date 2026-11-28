@@ -1,4 +1,4 @@
-package com.maxim.paclearn.storage.utility
+package com.maxim.paclearn.controller.storage.utility
 
 interface Storage<T> {
     fun insert(key: String, obj: T)

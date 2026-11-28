@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">PacLearn</string>
+    <string name="app_name">PACBOUND</string>
 
     <!-- Commun -->
     <string name="euros">%1$d €</string>
@@ -15,6 +15,14 @@
     <string name="duree_partie">Durée de la partie</string>
     <string name="duree_minutes">%1$d min</string>
     <string name="ma_collection">Ma collection</string>
+    <string name="triche">Triche</string>
+    <string name="telecharger_quartier">Télécharger mon quartier (%1$d km)</string>
+    <string name="quartier_absent">Pour jouer sans internet, télécharge ton quartier en Wi-Fi : %1$d km autour de toi, environ 5 Mo en ville.</string>
+    <string name="quartier_en_cours">Téléchargement du quartier… %1$d / %2$d</string>
+    <string name="quartier_enregistre">Quartier enregistré (%1$s) : tu peux y jouer sans internet.</string>
+    <string name="quartier_partiel">Quartier enregistré en partie (%1$d morceaux ont échoué) : réessaie plus tard.</string>
+    <string name="quartier_sans_position">Position inconnue : lance une partie ou ouvre une carte, puis réessaie.</string>
+    <string name="quartier_echec">Téléchargement impossible. Vérifie ta connexion et réessaie.</string>
 
     <!-- Jeu -->
     <string name="recherche_position">Recherche de ta position…</string>
@@ -22,6 +30,8 @@
     <string name="localisation_refusee">Autorisation de localisation refusée</string>
     <string name="chargement_plan">Chargement de la carte…</string>
     <string name="rues_indisponibles">Impossible de charger les rues autour de toi</string>
+    <string name="hors_ligne_plan_enregistre">Hors ligne : plan enregistré, il peut dater un peu</string>
+    <string name="hors_ligne_sans_plan">Hors ligne : pas de plan ici, les pièces sont posées en grille</string>
     <string name="attribution_osm">© les contributeurs d\'OpenStreetMap</string>
     <string name="info">ⓘ</string>
 
@@ -86,5 +96,11 @@
     <string name="tags">Tags</string>
     <string name="quantite">×%1$d</string>
     <string name="exemplaires">Exemplaires possédés : %1$d</string>
+    <string name="eclat">Éclat</string>
+    <string name="eclat_brillante">Brillante</string>
+    <string name="eclat_holographique">Holographique</string>
+    <string name="eclat_legendaire">Légendaire</string>
+    <string name="eclat_aucun">Aucun</string>
+    <string name="eclat_prochain">Encore %1$d pour %2$s</string>
     <string name="pas_obtenue">Pas encore obtenue. Cherche-la dans la boutique pendant une partie.</string>
 </resources>

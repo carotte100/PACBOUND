@@ -1,7 +1,7 @@
-package com.maxim.paclearn.storage.utility.file
+package com.maxim.paclearn.controller.storage.utility.file
 
 import android.content.Context
-import com.maxim.paclearn.storage.utility.Storage
+import com.maxim.paclearn.controller.storage.utility.Storage
 import java.io.BufferedReader
 import java.io.FileNotFoundException
 import java.io.InputStreamReader

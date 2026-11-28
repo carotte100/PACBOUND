@@ -1,14 +1,11 @@
-package com.maxim.paclearn.storage
+package com.maxim.paclearn.controller.storage
 
 import android.content.Context
 import com.maxim.paclearn.model.Amelioration
 import com.maxim.paclearn.model.Carte
 import org.json.JSONObject
 
-/**
- * Tout ce qui existe dans le jeu : les cartes qu'on peut obtenir et les ameliorations
- * de la boutique. Lu dans assets/data.json en attendant le serveur.
- */
+/** Toutes les cartes et ameliorations du jeu, lues dans assets/data.json. */
 class Catalogue(val cartes: List<Carte>, val ameliorations: List<Amelioration>) {
 
     companion object {

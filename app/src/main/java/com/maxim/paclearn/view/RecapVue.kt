@@ -1,4 +1,4 @@
-package com.maxim.paclearn
+package com.maxim.paclearn.view
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -20,26 +19,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.maxim.paclearn.model.Amelioration
-import com.maxim.paclearn.model.Carte
+import com.maxim.paclearn.R
+import com.maxim.paclearn.model.RecapPartie
 
-// La fin de partie : la fenetre "Quitter ?" et l'ecran de recap.
-
-/** Ce qui s'est passe pendant la partie, pour l'ecran de recap. */
-data class RecapPartie(
-    val secondesJouees: Int,
-    val pieces: Int,
-    val argentRestant: Int, // perdu : l'argent ne survit pas a la partie
-    val cartes: List<Carte>,
-    val ameliorations: List<Amelioration>,
-    val tempsEcoule: Boolean
-) {
-    val argentGagne get() = pieces * VALEUR_PIECE
-    // On commence a 0 € : ce qui n'est plus dans la poche a ete depense.
-    val argentDepense get() = argentGagne - argentRestant
-}
-
-/** Avant d'abandonner, on rappelle ce qui sera perdu. */
+/** "Quitter ?" : rappelle ce qui sera perdu. */
 @Composable
 fun FenetreQuitter(argent: Int, nbAmeliorations: Int, onRester: () -> Unit, onQuitter: () -> Unit) {
     Fenetre(onFermer = onRester) {
@@ -73,10 +56,11 @@ fun FenetreQuitter(argent: Int, nbAmeliorations: Int, onRester: () -> Unit, onQu
     }
 }
 
+/** Le bilan de fin de partie. */
 @Composable
 fun EcranRecap(recap: RecapPartie, onTerminer: () -> Unit) {
     BackHandler(onBack = onTerminer)
-    Surface(Modifier.fillMaxSize()) {
+    Fond(Modifier.fillMaxSize()) {
         Column(
             Modifier
                 .systemBarsPadding()
@@ -112,7 +96,6 @@ fun EcranRecap(recap: RecapPartie, onTerminer: () -> Unit) {
                     fontSize = 13.sp
                 )
             }
-            // Trois cartes par ligne.
             recap.cartes.chunked(3).forEach { ligne ->
                 Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     ligne.forEach { VisuelCarte(it, Modifier.weight(1f)) }

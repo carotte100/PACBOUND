@@ -1,12 +1,5 @@
-package com.maxim.paclearn
+package com.maxim.paclearn.view
 
-import android.content.Context
-import android.graphics.Color.TRANSPARENT
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -23,8 +16,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,16 +26,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.maxim.paclearn.R
 import com.maxim.paclearn.model.Carte
-import com.maxim.paclearn.storage.CarteStorage
-import com.maxim.paclearn.storage.Catalogue
+import com.maxim.paclearn.model.Eclat
+import com.maxim.paclearn.model.eclatDe
 
 private enum class Tri(@StringRes val nom: Int) { COUT(R.string.cout), NOM(R.string.nom), RARETE(R.string.rarete) }
 
@@ -50,30 +42,16 @@ private val DOMAINES = listOf("rouge", "vert", "bleu", "orange", "pourpre", "jau
 private val TYPES = listOf("unite" to R.string.type_unite, "sort" to R.string.type_sort, "equipement" to R.string.type_equipement)
 private val RARETES = listOf("commune", "peu commune", "rare", "epique")
 
-/** L'album : toutes les cartes du catalogue, grisees tant qu'on ne les a pas achetees. */
-class CollectionActivity : ComponentActivity() {
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge(SystemBarStyle.dark(TRANSPARENT), SystemBarStyle.dark(TRANSPARENT))
-        setContent {
-            PacTheme { EcranCollection(onRetour = ::finish) }
-        }
-    }
-}
-
+/** L'album : toutes les [cartes] du catalogue, grisees tant qu'on ne les possede pas. */
 @Composable
-private fun EcranCollection(onRetour: () -> Unit) {
-    val context = LocalContext.current
-    val cartes = remember { chargerAlbum(context) }
-
-    // Les reglages de l'ecran. "by remember" : ils survivent quand l'ecran se redessine.
+fun EcranCollection(cartes: List<Carte>, onRetour: () -> Unit) {
+    // Reglages de l'ecran, conserves quand il se redessine.
     var filtresOuverts by remember { mutableStateOf(false) }
     var tri by remember { mutableStateOf(Tri.COUT) }
     var domaine by remember { mutableStateOf<String?>(null) } // null : tous
     var type by remember { mutableStateOf<String?>(null) }
     var recherche by remember { mutableStateOf("") }
-    var detail by remember { mutableStateOf<Carte?>(null) } // la carte dont la fiche est ouverte
+    var detail by remember { mutableStateOf<Carte?>(null) } // fiche ouverte
 
     val obtenues = cartes.filter { it.quantity > 0 }
     val parSet = cartes
@@ -93,7 +71,7 @@ private fun EcranCollection(onRetour: () -> Unit) {
         .groupBy { it.set.lowercase() }
         .toSortedMap()
 
-    Surface(Modifier.fillMaxSize()) {
+    Fond(Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.systemBarsPadding(),
@@ -101,7 +79,6 @@ private fun EcranCollection(onRetour: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // L'en-tete prend toute la largeur de la grille.
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Bouton(stringResource(R.string.retour), onRetour)
@@ -120,7 +97,7 @@ private fun EcranCollection(onRetour: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text(stringResource(R.string.rechercher)) },
                         singleLine = true,
-                        shape = RectangleShape
+                        shape = RoundedCornerShape(12.dp)
                     )
                     Bouton(
                         texte = stringResource(if (filtresOuverts) R.string.masquer_filtres else R.string.filtres),
@@ -130,7 +107,7 @@ private fun EcranCollection(onRetour: () -> Unit) {
                         Choix(R.string.trier_par, Tri.entries.map { stringResource(it.nom) }, tri.ordinal) {
                             tri = Tri.entries[it]
                         }
-                        // Un second appui sur le choix actif l'enleve.
+                        // Second appui sur le choix actif : on l'enleve.
                         Choix(R.string.domaine, DOMAINES.map { it.replaceFirstChar(Char::uppercase) }, DOMAINES.indexOf(domaine)) {
                             domaine = if (domaine == DOMAINES[it]) null else DOMAINES[it]
                         }
@@ -159,7 +136,6 @@ private fun EcranCollection(onRetour: () -> Unit) {
                     )
                 }
                 items(cartesDuSet, key = { it.uniqueId() }) { carte ->
-                    // Pas encore achetee : grisee.
                     VisuelCarte(
                         carte,
                         Modifier
@@ -172,19 +148,6 @@ private fun EcranCollection(onRetour: () -> Unit) {
 
         detail?.let { FicheCarte(it, onFermer = { detail = null }) }
     }
-}
-
-/**
- * Le catalogue, avec pour chaque carte le nombre d'exemplaires possedes : 0 pour
- * celles pas encore achetees, qui s'affichent grisees.
- */
-private fun chargerAlbum(context: Context): List<Carte> {
-    val possedees = CarteStorage(context).getCollection().associateBy { it.uniqueId() }
-    val catalogue = Catalogue.load(context).cartes
-        .map { it.copy(quantity = possedees[it.uniqueId()]?.quantity ?: 0) }
-    // Une carte possedee peut ne plus etre au catalogue : on la garde quand meme.
-    val horsCatalogue = possedees.values.filter { c -> catalogue.none { it.uniqueId() == c.uniqueId() } }
-    return catalogue + horsCatalogue
 }
 
 /** Une ligne de boutons dont un seul est choisi (rempli) : [choisi] vaut -1 si aucun. */
@@ -221,6 +184,18 @@ private fun FicheCarte(carte: Carte, onFermer: () -> Unit) {
         if (carte.type == "unite") LigneInfo(stringResource(R.string.might), "${carte.might}")
         if (carte.motsCles.isNotEmpty()) LigneInfo(stringResource(R.string.mots_cles), carte.motsCles.replace(",", ", "))
         if (carte.tag.isNotEmpty()) LigneInfo(stringResource(R.string.tags), carte.tag.replace(",", ", "))
+        if (carte.quantity > 0) {
+            val eclat = eclatDe(carte.quantity)
+            LigneInfo(stringResource(R.string.eclat), stringResource(nomEclat(eclat)), enAvant = eclat != Eclat.AUCUN)
+            eclat.suivant?.let {
+                Text(
+                    text = stringResource(R.string.eclat_prochain, it.seuil - carte.quantity, stringResource(nomEclat(it))),
+                    modifier = Modifier.padding(top = 6.dp),
+                    color = colorResource(R.color.texte_discret),
+                    fontSize = 12.sp
+                )
+            }
+        }
 
         Text(
             text = if (carte.quantity > 0) stringResource(R.string.exemplaires, carte.quantity)
@@ -231,4 +206,11 @@ private fun FicheCarte(carte: Carte, onFermer: () -> Unit) {
         )
         Bouton(stringResource(R.string.fermer), onFermer, Modifier.fillMaxWidth())
     }
+}
+
+private fun nomEclat(eclat: Eclat) = when (eclat) {
+    Eclat.AUCUN -> R.string.eclat_aucun
+    Eclat.BRILLANTE -> R.string.eclat_brillante
+    Eclat.HOLOGRAPHIQUE -> R.string.eclat_holographique
+    Eclat.LEGENDAIRE -> R.string.eclat_legendaire
 }
